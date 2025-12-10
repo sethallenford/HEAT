@@ -12,7 +12,7 @@ function(states, event, ...)
         if subEvent == "SPELL_CAST_SUCCESS" and sourceGUID and HEAT:IsEnemy(sourceGUID, sourceFlags) then
             local now = GetTime()
             
-            -- A. WARRIOR STANCE INFERENCE
+            -- WARRIOR STANCE INFERENCE
             local newStance = nil
             if spellID == 100 or spellID == 6178 or spellID == 11578 then newStance = 2457 -- Charge -> Battle
             elseif spellID == 20252 or spellID == 20616 or spellID == 20617 then newStance = 2458 -- Intercept -> Berserker
@@ -25,7 +25,7 @@ function(states, event, ...)
                 local _, _, icon = GetSpellInfo(newStance)
                 HEAT.storedBuffs[sourceGUID][newStance] = { destGUID = sourceGUID, spellID = newStance, icon = icon, duration = -1, expirationTime = nil, startTime = now }
                 
-                -- B. GENERIC STATIC BUFF INFERENCE (MOUNTS)
+                -- STATIC BUFF INFERENCE (MOUNTS)
             elseif HEAT.spellData and HEAT.spellData[spellID] == -1 then
                 if not HEAT.storedBuffs[sourceGUID] then HEAT.storedBuffs[sourceGUID] = {} end
                 if not HEAT.storedBuffs[sourceGUID][spellID] then
