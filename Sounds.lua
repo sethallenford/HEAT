@@ -1,3 +1,4 @@
+--Event: CHAT_MSG_ADDON, NAME_PLATE_UNIT_ADDED, NAME_PLATE_UNIT_REMOVED, PLAYER_TARGET_CHANGED, PLAYER_FOCUS_CHANGED, UPDATE_MOUSEOVER_UNIT, UNIT_TARGET, GROUP_ROSTER_UPDATE, PLAYER_ENTERING_WORLD, PLAYER_LEAVING_WORLD, UNIT_SPELLCAST_START, UNIT_SPELLCAST_CHANNEL_START, ARENA_OPPONENT_UPDATE, CLEU:SPELL_CAST_START, CLEU:SPELL_CAST_SUCCESS, CLEU:SPELL_SUMMON, CLEU:SPELL_AURA_APPLIED, CLEU:SPELL_AURA_REFRESH, CLEU:SPELL_AURA_APPLIED_DOSE, CLEU:SPELL_ABSORBED, CLEU:SPELL_AURA_REMOVED, CLEU:SPELL_AURA_BROKEN, CLEU:SPELL_AURA_BROKEN_SPELL, CLEU:SPELL_AURA_REMOVED_DOSE, CLEU:SPELL_DISPEL, CLEU:SPELL_STOLEN
 function(event, ...)
     if not HEAT or not HEAT.initialized then return end
     
@@ -11,7 +12,6 @@ function(event, ...)
     local unitCastDelayed = HEAT.unitCastDelayed
     local UnitGUID = UnitGUID
     local UnitExists = UnitExists
-    local GetTime = GetTime
     local tinsert = table.insert
     local wipe = table.wipe or wipe
     local bit_band = bit.band
@@ -33,33 +33,32 @@ function(event, ...)
         ["WARLOCK"] = "Trinketed Warlock",
         ["PALADIN"] = "Trinketed Paladin",
         ["DRUID"]   = "Trinketed Druid",
-        ["DEATHKNIGHT"] = "Trinketed DeathKnight",
     }
-
+    
     -- 2. Define specific logic for Shared Spell IDs
     local SPECIAL_HANDLERS = {}
-
+    
     -- Helper for class lookup
     local function GetClassSound(sourceGUID)
         if not sourceGUID then return nil end
         local _, classFilename = GetPlayerInfoByGUID(sourceGUID)
         return classFilename and CLASS_SOUNDS[classFilename]
     end
-
+    
     -- [5579] Insignia of the Horde/Alliance (Warrior, Hunter, Shaman)
     SPECIAL_HANDLERS[5579] = GetClassSound
-
+    
     -- [23273] Insignia of the Horde/Alliance (Rogue, Warlock)
     SPECIAL_HANDLERS[23273] = GetClassSound
-
+    
     -- [23276] Insignia of the Horde/Alliance (Paladin, Priest)
     SPECIAL_HANDLERS[23276] = GetClassSound
-
+    
     -- [NOTE] Druid (23277) and Mage (18850) usually have unique IDs, 
     -- but we can map them here too just to be safe if you want uniform logic.
     SPECIAL_HANDLERS[23277] = GetClassSound
     SPECIAL_HANDLERS[18850] = GetClassSound
-
+    
     -- 3. Resolver Function
     local function GetSoundFile(spellID, defaultSound, sourceGUID)
         local handler = SPECIAL_HANDLERS[spellID]
@@ -69,7 +68,7 @@ function(event, ...)
         end
         return defaultSound
     end
-
+    
     -- =========================================================================
     -- 0.5 CAST TIME COMPATIBILITY
     -- =========================================================================
