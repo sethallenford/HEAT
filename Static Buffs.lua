@@ -9,9 +9,9 @@ function(states, event, ...)
     local isCLEU = (event == "COMBAT_LOG_EVENT_UNFILTERED" or string.sub(event, 1, 5) == "CLEU:")
     
     if isCLEU then
-        local _, subEvent, _, sourceGUID, _, _, _, _, _, _, _, spellID = CombatLogGetCurrentEventInfo()
+        local _, subEvent, _, sourceGUID, _, sourceFlags, _, _, _, _, _, spellID = CombatLogGetCurrentEventInfo()
         
-        if subEvent == "SPELL_CAST_SUCCESS" and sourceGUID then
+        if subEvent == "SPELL_CAST_SUCCESS" and sourceGUID and HEAT:IsEnemy(sourceGUID, sourceFlags) then
             local now = GetTime()
             
             -- A. WARRIOR STANCE INFERENCE
@@ -103,4 +103,3 @@ function(states, event, ...)
     
     return true
 end
-
