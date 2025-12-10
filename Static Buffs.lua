@@ -1,14 +1,12 @@
 --Events: PLAYER_TARGET_CHANGED, UNIT_AURA, NAME_PLATE_UNIT_ADDED, CHAT_MSG_ADDON, CLEU:SPELL_AURA_APPLIED, CLEU:SPELL_AURA_REMOVED, CLEU:SPELL_AURA_REFRESH, CLEU:SPELL_AURA_APPLIED_DOSE, CLEU:SPELL_AURA_REMOVED_DOSE, CLEU:SPELL_AURA_BROKEN, CLEU:SPELL_AURA_BROKEN_SPELL, CLEU:SPELL_DISPEL, CLEU:SPELL_STOLEN, CLEU:UNIT_DIED, CLEU:SPELL_CAST_SUCCESS
+
 function(states, event, ...)
     if not HEAT or not HEAT.initialized then return end
     
     -- PRE-FILTER: STRICTLY ignore mouseover events in this specific aura
     if event == "UPDATE_MOUSEOVER_UNIT" then return false end
     
-    -- 1. FAST INFERENCE (Maintains History for everyone)
-    local isCLEU = (event == "COMBAT_LOG_EVENT_UNFILTERED" or string.sub(event, 1, 5) == "CLEU:")
-    
-    if isCLEU then
+    if event == "COMBAT_LOG_EVENT_UNFILTERED" then
         local _, subEvent, _, sourceGUID, _, sourceFlags, _, _, _, _, _, spellID = CombatLogGetCurrentEventInfo()
         
         if subEvent == "SPELL_CAST_SUCCESS" and sourceGUID and HEAT:IsEnemy(sourceGUID, sourceFlags) then
@@ -51,7 +49,7 @@ function(states, event, ...)
     if event == "PLAYER_TARGET_CHANGED" then
         isRelevant = true
         if HEAT.ProcessHostilityEvent then HEAT:ProcessHostilityEvent(event, ...) end
-    elseif isCLEU then
+    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
         local _, _, _, sourceGUID, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
         if sourceGUID == targetGUID or destGUID == targetGUID then 
             isRelevant = true
@@ -103,3 +101,4 @@ function(states, event, ...)
     
     return true
 end
+
