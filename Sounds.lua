@@ -1,4 +1,5 @@
 --Event: CHAT_MSG_ADDON, NAME_PLATE_UNIT_ADDED, NAME_PLATE_UNIT_REMOVED, PLAYER_TARGET_CHANGED, PLAYER_FOCUS_CHANGED, UPDATE_MOUSEOVER_UNIT, UNIT_TARGET, GROUP_ROSTER_UPDATE, PLAYER_ENTERING_WORLD, PLAYER_LEAVING_WORLD, UNIT_SPELLCAST_START, UNIT_SPELLCAST_CHANNEL_START, ARENA_OPPONENT_UPDATE, CLEU:SPELL_CAST_START, CLEU:SPELL_CAST_SUCCESS, CLEU:SPELL_SUMMON, CLEU:SPELL_AURA_APPLIED, CLEU:SPELL_AURA_REFRESH, CLEU:SPELL_AURA_APPLIED_DOSE, CLEU:SPELL_ABSORBED, CLEU:SPELL_AURA_REMOVED, CLEU:SPELL_AURA_BROKEN, CLEU:SPELL_AURA_BROKEN_SPELL, CLEU:SPELL_AURA_REMOVED_DOSE, CLEU:SPELL_DISPEL, CLEU:SPELL_STOLEN
+
 function(event, ...)
     if not HEAT or not HEAT.initialized then return end
     
@@ -12,10 +13,7 @@ function(event, ...)
     local unitCastDelayed = HEAT.unitCastDelayed
     local UnitGUID = UnitGUID
     local UnitExists = UnitExists
-    local tinsert = table.insert
-    local wipe = table.wipe or wipe
-    local bit_band = bit.band
-    local string_sub = string.sub
+    --local wipe = table.wipe or wipe
     local GetPlayerInfoByGUID = GetPlayerInfoByGUID
     
     -- =========================================================================
@@ -67,21 +65,6 @@ function(event, ...)
             if specificSound then return specificSound end
         end
         return defaultSound
-    end
-    
-    -- =========================================================================
-    -- 0.5 CAST TIME COMPATIBILITY
-    -- =========================================================================
-    local function GetSpellCastTime(spellID)
-        if not spellID then return 0 end
-        if C_Spell and C_Spell.GetSpellInfo then
-            local info = C_Spell.GetSpellInfo(spellID)
-            if info then return info.castTime or 0 end
-        else
-            local _, _, _, castTime = GetSpellInfo(spellID)
-            return castTime or 0
-        end
-        return 0
     end
     
     -- =========================================================================
@@ -156,49 +139,69 @@ function(event, ...)
         if HEAT.BuildUnitTokens then HEAT:BuildUnitTokens() end
         return
         
-    elseif event == "PLAYER_LEAVING_WORLD" then
-        wipe(HEAT.guidToUnit)
-        return
+        --elseif event == "PLAYER_LEAVING_WORLD" then
+        --wipe(HEAT.guidToUnit)
+        --return
     end
     
     -- =========================================================================
     -- 3. TRIGGER LOGIC: UNIT SPELLCAST
     -- =========================================================================
-    if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START" then
+    if
+    event == "UNIT_SPELLCAST_START" or
+    event == "UNIT_SPELLCAST_CHANNEL_START" then
         local unit, _, spellID = ...
-        local spellInfo = spellIDMap[event] and spellIDMap[event][spellID]
-        if not spellInfo then return end
-        
-        if event == "UNIT_SPELLCAST_START" then
-            local castTime = GetSpellCastTime(spellID)
-            if not castTime or castTime == 0 then return end
-        end
-        
-        if HEAT.UpdateUnitCache then HEAT:UpdateUnitCache(unit) end
-        
         if unit and UnitExists(unit) then
-            local guid = UnitGUID(unit)
-            local isEnemy = false
-            
-            local node = cache.cache[guid]
-            if node and node.isEnemy then
-                isEnemy = true
-                HEAT:MoveToHead(node)
-            else
-                local unitFlags = HEAT:BuildFlags(unit, guid)
-                if HEAT:IsEnemy(guid, unitFlags) then isEnemy = true end
-            end
-            
-            if isEnemy then
-                local soundFile = GetSoundFile(spellID, spellInfo.soundFile, guid)
+            local sourceGUID = UnitGUID(unit)
+            if sourceGUID and sourceGUID ~= playerGUID then
+                local spellInfo = (spellIDMap[event] and spellIDMap[event][spellID]) 
+                local sourceFlags = HEAT:BuildFlags(unit)
                 
-                if spellInfo.requireDst then
-                    if UnitExists(unit) and UnitGUID(unit .. "target") == playerGUID then
-                        HEAT:PlaySound(soundFile, CHANNEL)
+                if spellInfo and HEAT:IsEnemy(sourceGUID, sourceFlags) then
+                    -- Only apply delay logic if the spell requires a destination check
+                    if spellInfo.requireDst then
+                        -- Check if we've already delayed for this unit's cast start
+                        if unitCastDelayed[sourceGUID] then
+                            -- Already handled the delay once for this unit, check target immediately
+                            -- Re-verify UnitExists
+                            --if UnitExists(unit) then
+                                if UnitIsUnit(unit .. "target", "player") then
+                                    HEAT:PlaySound(spellInfo.soundFile, CHANNEL)
+                                end
+                            --end
+                        else
+                            -- First time for this unit, use the delay
+                            C_Timer.After(0, function()
+                                    -- Re-verify UnitExists in case it disappeared during the delay
+                                    --if UnitExists(unit) then
+                                        -- Check the target *after* the short delay
+                                        if UnitIsUnit(unit .. "target", "player") then
+                                            HEAT:PlaySound(spellInfo.soundFile, CHANNEL)
+                                        end
+                                        -- Mark that we've run the delayed check for this unit
+                                        unitCastDelayed[sourceGUID] = true
+                                    --end
+                            end)
+                        end
+                    else
+                        -- Spell does not require destination check, play sound immediately
+                        HEAT:PlaySound(spellInfo.soundFile, CHANNEL)
                     end
-                else
-                    HEAT:PlaySound(soundFile, CHANNEL)
                 end
+            end
+        end
+        return
+    end
+    
+    if event == "UNIT_AURA" then
+        local unitID, _, _, _, spellID = ...
+        if unitID and UnitExists(unitID) then
+            local sourceGUID = UnitGUID(unitID)
+            local sourceFlags = HEAT:BuildFlags(unitID)
+            -- Check if DESTINATION is enemy
+            if sourceGUID and sourceFlags and HEAT:IsEnemy(sourceGUID, sourceFlags) then 
+                local spellInfo = (spellIDMap[event] and spellIDMap[event][spellID])
+                if spellInfo then HEAT:PlaySound(spellInfo.soundFile, CHANNEL) end
             end
         end
         return
@@ -207,7 +210,7 @@ function(event, ...)
     -- =========================================================================
     -- 4. TRIGGER LOGIC: COMBAT LOG
     -- =========================================================================
-    if event == "COMBAT_LOG_EVENT_UNFILTERED" or (event and string_sub(event, 1, 5) == "CLEU:") then
+    if event == "COMBAT_LOG_EVENT_UNFILTERED" then
         local _, subEvent, _, sourceGUID, _, sourceFlags, _, destGUID, _, destFlags, _, spellID, _, _, auraType, extraSpellID = CombatLogGetCurrentEventInfo()
         
         local spellInfo = spellIDMap[subEvent] and spellIDMap[subEvent][spellID]
@@ -288,3 +291,4 @@ function(event, ...)
         end
     end
 end
+
