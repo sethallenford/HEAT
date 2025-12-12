@@ -101,7 +101,7 @@ local function init()
                 ["Flametongue Weapon"] = {"Flametongue Weapon", [8024]=false, [8025]=false, [8027]=false, [8030]=false, [8031]=false, [8032]=false, [10446]=false, [16339]=false, [16341]=false, [16342]=false, [16347]=false, [16348]=false, [436519]=false, [461634]=false},
                 ["Frost Resistance Aura"] = {"Frost Resistance Aura", [19888]=false, [19893]=false, [19897]=false, [19898]=false, [19906]=false, [19907]=false},
                 ["Frostbrand Weapon"] = {"Frostbrand Weapon", [8033]=false, [8035]=false, [8038]=false, [8039]=false, [10456]=false, [10457]=false, [16355]=false, [16356]=false, [16357]=false, [16358]=false, [461633]=false},
-                ["Defibrillate"] = {"Goblin Jumper Cables XL",[22999]=false},
+                ["Defibrillate"] = {"Goblin Jumper Cables XL", [22999]=false},
                 ["Defibrillate"] = {"Goblin Jumper Cables", [8342]=false},
                 ["Goblin Bomb"] = {"Goblin Bomb", [23134]=false},
                 ["Great Stamina"] = {"Great Stamina", [4187]=false, [4188]=false, [4189]=false, [4190]=false, [4191]=false, [4192]=false, [4193]=false, [4194]=false, [4195]=false, [4196]=false, [4197]=false, [4198]=false, [4199]=false, [4200]=false, [4201]=false, [4202]=false, [5041]=false, [5042]=false, [5048]=false, [5049]=false, [24533]=false, [24534]=false, [24535]=false, [24536]=false, [24537]=false, [24538]=false, [24539]=false, [24540]=false, [24541]=false, [24636]=false},
