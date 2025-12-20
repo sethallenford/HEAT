@@ -1,0 +1,9 @@
+## Interface: 110000
+## Author: Seth
+## Version: 1.0.0
+## Title: HEAT (|cFFFFD700Hostile|r |cFFFF8C00Event|r |cFFFF4500Aura|r |cFFFF0000Tracker|r)
+## SavedVariables: HEATDB
+## SavedVariablesByCharacter: N/A
+## OptionalDeps: N/A
+
+HEAT.lua
