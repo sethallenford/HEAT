@@ -1,6 +1,8 @@
-# H.E.A.T. (🔥Hostile Event Aura Tracker🔥)
-  Play enemy spell sounds and display enemy buffs on target frame and on nameplates.
+# H.E.A.T. 🔥 $\color{#FFD700}\text{Hostile}\ \color{#FF8C00}\text{Event}\ \color{#FF4500}\text{Aura}\ \color{#FF0000}\text{Tracker}$
 
+Play enemy spell sounds and display enemy buffs on target frame and on nameplates.
+
+### Installation
 
 Place [HEAT](https://github.com/sethallenford/HEAT/tree/0a52f162efed95e9c80302d3355756ee5c3edb9c/HEAT) here 👉 Interface\AddOns
 
