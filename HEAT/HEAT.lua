@@ -5,15 +5,13 @@ local function init()
 	if HEAT.initialized then return end
     	 
     -- Centralized list of spells to track by Name
-    HEAT.spells =
-    {
-        "Stealth",
-        "Prowl",
-        "Shadowmeld",
-        "Camouflage",
-        "Subterfuge",
-        -- Add other spells here, e.g.:
-        -- "Power Word: Shield",
+    HEAT.spells = {
+        ["Stealth"] = "1784=132320=0",
+        ["Prowl"] = "5215=132090=0",
+        ["Shadowmeld"] = "58984=136222=0",
+        ["Camouflage"] = "199483=461113=60",
+        ["Subterfuge"] = "115192=571317=3",
+        -- Add others following the format: "ID=Icon=Duration"
     }
 
     HEAT = HEAT or {}
