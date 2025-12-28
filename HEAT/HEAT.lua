@@ -8,7 +8,6 @@ local currentProject = WOW_PROJECT_ID or PROJECT_ERA
 local function init()
     if HEAT.initialized then return end
 
-    -- MODIFIED: Initialize as empty, we will populate this dynamically below
     local MAXSIZE = math.huge;
     HEAT.spellData = {}
     HEAT.nameplateBuffs = {} 
@@ -32474,7 +32473,7 @@ local function init()
             HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_START"] = HEAT.soundTable["SPELL_CAST_START"] 
             
             -- Channel Update (e.g., pushback) - Maps to same data as Start
-            HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_UPDATE"] = HEAT.soundTable["SPELL_CAST_START"] 
+            --HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_UPDATE"] = HEAT.soundTable["SPELL_CAST_START"] 
             
             -- Channel Stop - Maps to same data as Start so we can look up the Spell ID
             HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_STOP"] = HEAT.soundTable["SPELL_CAST_START"] 
@@ -32484,10 +32483,9 @@ local function init()
             HEAT.soundTable["UNIT_SPELLCAST_SUCCEEDED"] = HEAT.soundTable["SPELL_CAST_SUCCESS"]
         end
 
-        -- Build spell cache
         if HEAT.spellData then
             local spellCount = 0
-            local parsedSpellData = {} -- Map: [ID] = Duration (for Static_Buffs.lua)
+            local parsedSpellData = {}
             
             for spellName, dataString in pairs(HEAT.spellData) do
                 -- Parse "ID=Icon=Duration,ID2=Icon2=Dur2"
@@ -32498,10 +32496,8 @@ local function init()
                         local icon = tonumber(sIcon)
                         local dur = tonumber(sDur)
                         
-                        -- Populate table (ID -> Duration lookup)
                         parsedSpellData[id] = dur
                         
-                        -- Populate master Tracker Info (Database)
                         HEAT.AuraInfo[id] = {
                             spellID = id,
                             icon = icon,
@@ -32517,7 +32513,6 @@ local function init()
             print(string.format("|cFFFFD700H|r |cFFFF8C00E|r |cFFFF4500A|r |cFFFF0000T|r Successfully built and cached |cFF00FF00%d|r spell definitions.", spellCount))
         end
 
-        -- Build Sound Map (Sounds Only)
         if HEAT.soundTable then
             for eventType, eventSpells in pairs(HEAT.soundTable) do
                 HEAT.spellIDMap[eventType] = {}
@@ -32525,7 +32520,6 @@ local function init()
                     local soundFile = spellConfig[1]
                     for key, value in pairs(spellConfig) do
                         if type(key) == "number" then
-                            -- Populate Sound Map
                             HEAT.spellIDMap[eventType][key] = { soundFile = soundFile, requireDst = value }
                         end
                     end
@@ -32870,6 +32864,8 @@ HeatFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 HeatFrame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 HeatFrame:RegisterEvent("PLAYER_FLAGS_CHANGED")
 HeatFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+HeatFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+HeatFrame:RegisterEvent("PLAYER_FOCUS_CHANGED")
 HeatFrame:RegisterEvent("UNIT_FLAGS")
 HeatFrame:RegisterEvent("UNIT_FACTION")
 HeatFrame:RegisterEvent("UNIT_TARGET")
