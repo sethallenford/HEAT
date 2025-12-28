@@ -15362,12 +15362,6 @@ local function init()
             "Ghost Wolf",
             "Snowman"
         }
-
-        --if HEAT.spellData then
-            --for spellName, _ in pairs(HEAT.spellData) do
-                --table.insert(HEAT.nameplateBuffs, spellName)
-            --end
-        --end
         
         HEAT.soundTable = {
             ["EXTRA_STRIKES"] = {
@@ -15933,11 +15927,6 @@ local function init()
                 ["Spell Lock"] = {"Spell Lock", [19244]=false, [19647]=false, [19648]=false, [19650]=false, [20433]=false, [20434]=false, [24259]=false}
             }
         }
-
-        
-    for name, _ in pairs(HEAT.spellData) do
-        table.insert(HEAT.nameplateBuffs, name)
-    end
     
     HEAT.unitTokens = { "playerpet", "target", "focus", "mouseover" }
     for i = 1, 5 do table.insert(HEAT.unitTokens, "boss"..i) end
