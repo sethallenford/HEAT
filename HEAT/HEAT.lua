@@ -16026,8 +16026,6 @@ local function init()
     
     -- Mark as initialized so we don't run this again
     HEAT.initialized = true
-        
-    --print("|cFFFFD700Hostile|r |cFFFF8C00Event|r |cFFFF4500Aura|r |cFFFF0000Tracker|r Initializing Core Library...")
 
 end
 
@@ -16266,7 +16264,7 @@ function HEAT:ProcessDataEvents(event, ...)
                         buffDuration = tonumber(spellDataForApplication.duration) 
                     end
                     
-                    print("Applying Buff:", spellDataForApplication.name, "| ID:", spellID, "| Dest:", destGUID, "| Dur:", buffDuration)
+                    --print("Applying Buff:", spellDataForApplication.name, "| ID:", spellID, "| Dest:", destGUID, "| Dur:", buffDuration)
 
                     local expirationTime = (buffDuration == INFINITY) and nil or ((buffDuration > 0) and (now + buffDuration) or nil)
                     
