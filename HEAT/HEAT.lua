@@ -32722,9 +32722,7 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
         if self.storedBuffs[guid] then
             for spellID, _ in pairs(self.storedBuffs[guid]) do
                 if not foundSpells[spellID] then
-                    if not isEnemy then
                         self.storedBuffs[guid][spellID] = nil
-                    end
                 end
             end
             -- Cleanup if empty
@@ -32755,7 +32753,7 @@ function HEAT:ProcessDataEvents(event, ...)
         
         local idToProcess = spellID
         local isApplication = subEvent == "SPELL_AURA_APPLIED" or subEvent == "SPELL_AURA_REFRESH"
-        local isRemoval = subEvent == "SPELL_AURA_REMOVED" or subEvent == "SPELL_AURA_BROKEN_SPELL"
+        local isRemoval = subEvent == "SPELL_AURA_REMOVED" or subEvent == "SPELL_AURA_BROKEN" or subEvent == "SPELL_AURA_BROKEN_SPELL"
         local isDispel = subEvent == "SPELL_DISPEL" or subEvent == "SPELL_STOLEN"
         if isDispel and extraSpellID and extraSpellID ~= 0 then idToProcess = extraSpellID end
         
