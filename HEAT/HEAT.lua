@@ -1,7 +1,7 @@
 HEAT = HEAT or { initialized = false }
 
 local PROJECT_ERA = 2 -- 1.15.8.64907 
-local PROJECT_TBC = 3 -- 2.5.5.65000
+local PROJECT_TBC = 5 -- 3 -- 2.5.5.65000
 
 local currentProject = WOW_PROJECT_ID or PROJECT_ERA 
 
@@ -15321,11 +15321,11 @@ local function init()
             "Blessing of Sacrifice",
             "Divine Protection",
             "Divine Shield",
-            --"Hide",
-            --"Stealth",
-            --"Prowl",
-            --"Shadowmeld",
-            --"Camouflage",
+            "Hide",
+            "Stealth",
+            "Prowl",
+            "Shadowmeld",
+            "Camouflage",
             "Subterfuge",
             "Perception",
             "Ice Block",
@@ -31833,11 +31833,11 @@ local function init()
             "Blessing of Sacrifice",
             "Divine Protection",
             "Divine Shield",
-            --"Hide",
-            --"Stealth",
-            --"Prowl",
-            --"Shadowmeld",
-            --"Camouflage",
+            "Hide",
+            "Stealth",
+            "Prowl",
+            "Shadowmeld",
+            "Camouflage",
             "Subterfuge",
             "Perception",
             "Ice Block",
@@ -31869,7 +31869,9 @@ local function init()
             "Blade Flurry",
             "Elemental Mastery",
             "Mind Quickening",
-            "Last Stand"
+            "Last Stand",
+            "Water Shield",
+            "Travel Form"
         }
         
         HEAT.soundTable = {
