@@ -1,7 +1,7 @@
 HEAT = HEAT or { initialized = false }
 
 local PROJECT_ERA = 2 -- 1.15.8.64907 
-local PROJECT_TBC = 5 -- 3 -- 2.5.5.65000
+local PROJECT_TBC = 5 -- 2.5.5.65000
 
 local currentProject = WOW_PROJECT_ID or PROJECT_ERA 
 
@@ -15357,7 +15357,8 @@ local function init()
             "Blade Flurry",
             "Elemental Mastery",
             "Mind Quickening",
-            "Last Stand"
+            "Last Stand",
+            "Inner Fire"
         }
         
         HEAT.soundTable = {
@@ -15924,9 +15925,10 @@ local function init()
                 ["Spell Lock"] = {"Spell Lock", [19244]=false, [19647]=false, [19648]=false, [19650]=false, [20433]=false, [20434]=false, [24259]=false}
             }
         }
-    else
+
+    elseif currentProject == PROJECT_TBC then 
     ----------------------------------------------------------------------------
-    -- TBC CLASSIC ERA
+    -- TBC CLASSIC
     ---------------------------------------------------------------------------- 
         HEAT = HEAT or {}
 
@@ -32438,6 +32440,12 @@ local function init()
                 ["Spell Lock"] = {"Spell Lock", [19244]=false, [19647]=false, [19648]=false, [19650]=false, [20433]=false, [20434]=false, [24259]=false}
             }
         }
+
+    else
+    ----------------------------------------------------------------------------
+    -- MoP CLASSIC
+    ----------------------------------------------------------------------------
+        
     end
         
         HEAT.unitTokens = { "playerpet", "target", "focus", "mouseover" }
