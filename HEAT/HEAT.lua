@@ -7,14 +7,6 @@ local PROJECT_CATA = WOW_PROJECT_CATACLYSM_CLASSIC -- 4.4.2.60895
 local PROJECT_MOP = WOW_PROJECT_MISTS_CLASSIC -- 5.5.3.64857
 local currentProject = WOW_PROJECT_ID or PROJECT_ERA 
 
-
---local function Add(name, data)
-    --HEAT.spellData[name] = data
---end
-
-local loaders = {}
-local function Add(name, data) HEAT.spellData[name] = data end
-
 local function init()
     if HEAT.initialized then return end
 
