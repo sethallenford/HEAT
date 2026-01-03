@@ -91,7 +91,6 @@ local function init()
 
         if currentProject == PROJECT_ERA then
             for _, chunk in ipairs(raw_data) do
-                -- Magic pattern: Grab everything between delimiters
                 for name, info in chunk:gmatch("(.-)~([^^]+)^") do
                     HEAT.spellData[name] = info
                 end
@@ -100,6 +99,7 @@ local function init()
         raw_data = nil
         
         HEAT.nameplateBuffs = {
+            "Battle Stance",
             "Blessing of Sacrifice",
             "Divine Protection",
             "Divine Shield",
@@ -766,7 +766,6 @@ local function init()
 
         if currentProject == PROJECT_TBC then
             for _, chunk in ipairs(raw_data) do
-                -- Magic pattern: Grab everything between delimiters
                 for name, info in chunk:gmatch("(.-)~([^^]+)^") do
                     HEAT.spellData[name] = info
                 end
@@ -1388,94 +1387,94 @@ local function init()
    
     end
         
-        HEAT.unitTokens = { "playerpet", "target", "focus", "mouseover" }
-        for i = 1, 5 do table.insert(HEAT.unitTokens, "boss"..i) end
-        for i = 1, 5 do table.insert(HEAT.unitTokens, "arena"..i) end
-        for i = 1, 5 do table.insert(HEAT.unitTokens, "arenapet"..i) end
-        for i = 1, 40 do table.insert(HEAT.unitTokens, "nameplate"..i) end
-        for i = 1, 4 do table.insert(HEAT.unitTokens, "party"..i) end
-        for i = 1, 4 do table.insert(HEAT.unitTokens, "partypet"..i) end
-        for i = 1, 40 do table.insert(HEAT.unitTokens, "raid"..i) end
-        for i = 1, 40 do table.insert(HEAT.unitTokens, "raidpet"..i) end
-        
-        HEAT.FLAGS = {
-            PLAYER = COMBATLOG_OBJECT_TYPE_PLAYER or 0x00000400,
-            NPC = COMBATLOG_OBJECT_TYPE_NPC or 0x00000800,
-            PET = COMBATLOG_OBJECT_TYPE_PET or 0x00002000,
-            GUARDIAN = COMBATLOG_OBJECT_TYPE_GUARDIAN or 0x00004000,
-            CONTROL_PLAYER = COMBATLOG_OBJECT_CONTROL_PLAYER or 0x00000100,
-            REACTION_FRIENDLY = COMBATLOG_OBJECT_REACTION_FRIENDLY or 0x00000010,
-            REACTION_NEUTRAL  = COMBATLOG_OBJECT_REACTION_NEUTRAL  or 0x00000020,
-            REACTION_HOSTILE  = COMBATLOG_OBJECT_REACTION_HOSTILE  or 0x00000040,
-            AFFILIATION_OUTSIDER = COMBATLOG_OBJECT_AFFILIATION_OUTSIDER or 0x00000008
-        };
+    HEAT.unitTokens = { "playerpet", "target", "focus", "mouseover" }
+    for i = 1, 5 do table.insert(HEAT.unitTokens, "boss"..i) end
+    for i = 1, 5 do table.insert(HEAT.unitTokens, "arena"..i) end
+    for i = 1, 5 do table.insert(HEAT.unitTokens, "arenapet"..i) end
+    for i = 1, 40 do table.insert(HEAT.unitTokens, "nameplate"..i) end
+    for i = 1, 4 do table.insert(HEAT.unitTokens, "party"..i) end
+    for i = 1, 4 do table.insert(HEAT.unitTokens, "partypet"..i) end
+    for i = 1, 40 do table.insert(HEAT.unitTokens, "raid"..i) end
+    for i = 1, 40 do table.insert(HEAT.unitTokens, "raidpet"..i) end
+    
+    HEAT.FLAGS = {
+        PLAYER = COMBATLOG_OBJECT_TYPE_PLAYER or 0x00000400,
+        NPC = COMBATLOG_OBJECT_TYPE_NPC or 0x00000800,
+        PET = COMBATLOG_OBJECT_TYPE_PET or 0x00002000,
+        GUARDIAN = COMBATLOG_OBJECT_TYPE_GUARDIAN or 0x00004000,
+        CONTROL_PLAYER = COMBATLOG_OBJECT_CONTROL_PLAYER or 0x00000100,
+        REACTION_FRIENDLY = COMBATLOG_OBJECT_REACTION_FRIENDLY or 0x00000010,
+        REACTION_NEUTRAL  = COMBATLOG_OBJECT_REACTION_NEUTRAL  or 0x00000020,
+        REACTION_HOSTILE  = COMBATLOG_OBJECT_REACTION_HOSTILE  or 0x00000040,
+        AFFILIATION_OUTSIDER = COMBATLOG_OBJECT_AFFILIATION_OUTSIDER or 0x00000008
+    };
                             
         
-        if HEAT.soundTable["SPELL_AURA_APPLIED"] and not HEAT.soundTable["SPELL_AURA_REFRESH"] then
-            HEAT.soundTable["SPELL_AURA_REFRESH"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
-            HEAT.soundTable["UNIT_AURA"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
-        end
+    if HEAT.soundTable["SPELL_AURA_APPLIED"] and not HEAT.soundTable["SPELL_AURA_REFRESH"] then
+        HEAT.soundTable["SPELL_AURA_REFRESH"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
+        HEAT.soundTable["UNIT_AURA"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
+    end
 
-        if HEAT.soundTable["SPELL_CAST_START"] then
-            HEAT.soundTable["UNIT_SPELLCAST_START"] = HEAT.soundTable["SPELL_CAST_START"]
-            
-            -- Channel Start
-            HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_START"] = HEAT.soundTable["SPELL_CAST_START"] 
-            
-            -- Channel Update (e.g., pushback) - Maps to same data as Start
-            --HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_UPDATE"] = HEAT.soundTable["SPELL_CAST_START"] 
-            
-            -- Channel Stop - Maps to same data as Start so we can look up the Spell ID
-            HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_STOP"] = HEAT.soundTable["SPELL_CAST_START"] 
-        end
+    if HEAT.soundTable["SPELL_CAST_START"] then
+        HEAT.soundTable["UNIT_SPELLCAST_START"] = HEAT.soundTable["SPELL_CAST_START"]
+        
+        -- Channel Start
+        HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_START"] = HEAT.soundTable["SPELL_CAST_START"] 
+        
+        -- Channel Update (e.g., pushback) - Maps to same data as Start
+        --HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_UPDATE"] = HEAT.soundTable["SPELL_CAST_START"] 
+        
+        -- Channel Stop - Maps to same data as Start so we can look up the Spell ID
+        HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_STOP"] = HEAT.soundTable["SPELL_CAST_START"] 
+    end
 
-        if HEAT.soundTable["SPELL_CAST_SUCCESS"] then
-            HEAT.soundTable["UNIT_SPELLCAST_SUCCEEDED"] = HEAT.soundTable["SPELL_CAST_SUCCESS"]
-        end
+    if HEAT.soundTable["SPELL_CAST_SUCCESS"] then
+        HEAT.soundTable["UNIT_SPELLCAST_SUCCEEDED"] = HEAT.soundTable["SPELL_CAST_SUCCESS"]
+    end
 
-        if HEAT.spellData then
-            local spellCount = 0
-            local parsedSpellData = {}
-            
-            for spellName, dataString in pairs(HEAT.spellData) do
-                -- Parse "ID=Icon=Duration,ID2=Icon2=Dur2"
-                for entry in string.gmatch(dataString, "([^,]+)") do
-                    local sID, sIcon, sDur = string.match(entry, "(%d+)=(%d+)=([%d%-]+)")
-                    if sID then
-                        local id = tonumber(sID)
-                        local icon = tonumber(sIcon)
-                        local dur = tonumber(sDur)
-                        
-                        parsedSpellData[id] = dur
-                        
-                        HEAT.AuraInfo[id] = {
-                            spellID = id,
-                            icon = icon,
-                            name = spellName,
-                            duration = dur
-                        }
-                        spellCount = spellCount + 1
-                    end
-                end
-            end
-            
-            HEAT.spellData = parsedSpellData
-            print(string.format("|cFFFFD700H|r |cFFFF8C00E|r |cFFFF4500A|r |cFFFF0000T|r Successfully built and cached |cFF00FF00%d|r spell definitions.", spellCount))
-        end
-
-        if HEAT.soundTable then
-            for eventType, eventSpells in pairs(HEAT.soundTable) do
-                HEAT.spellIDMap[eventType] = {}
-                for _, spellConfig in pairs(eventSpells) do
-                    local soundFile = spellConfig[1]
-                    for key, value in pairs(spellConfig) do
-                        if type(key) == "number" then
-                            HEAT.spellIDMap[eventType][key] = { soundFile = soundFile, requireDst = value }
-                        end
-                    end
+    if HEAT.spellData then
+        local spellCount = 0
+        local parsedSpellData = {}
+        
+        for spellName, dataString in pairs(HEAT.spellData) do
+            -- Parse "ID=Icon=Duration,ID2=Icon2=Dur2"
+            for entry in string.gmatch(dataString, "([^,]+)") do
+                local sID, sIcon, sDur = string.match(entry, "(%d+)=(%d+)=([%d%-]+)")
+                if sID then
+                    local id = tonumber(sID)
+                    local icon = tonumber(sIcon)
+                    local dur = tonumber(sDur)
+                    
+                    parsedSpellData[id] = dur
+                    
+                    HEAT.AuraInfo[id] = {
+                        spellID = id,
+                        icon = icon,
+                        name = spellName,
+                        duration = dur
+                    }
+                    spellCount = spellCount + 1
                 end
             end
         end
+        
+        HEAT.spellData = parsedSpellData
+        print(string.format("|cFFFFD700H|r |cFFFF8C00E|r |cFFFF4500A|r |cFFFF0000T|r Successfully built and cached |cFF00FF00%d|r spell definitions.", spellCount))
+    end
+
+    if HEAT.soundTable then
+        for eventType, eventSpells in pairs(HEAT.soundTable) do
+            HEAT.spellIDMap[eventType] = {}
+            for _, spellConfig in pairs(eventSpells) do
+                local soundFile = spellConfig[1]
+                for key, value in pairs(spellConfig) do
+                    if type(key) == "number" then
+                        HEAT.spellIDMap[eventType][key] = { soundFile = soundFile, requireDst = value }
+                    end
+                end
+            end
+        end
+    end
     
     -- Mark as initialized so we don't run this again
     HEAT.initialized = true
@@ -1693,6 +1692,38 @@ function HEAT:ProcessDataEvents(event, ...)
             return
         end
         
+        -- Warrior Stance Inference
+        if subEvent == "SPELL_CAST_SUCCESS" then
+            local newStance = nil
+            -- Charge (Rank 1-3) -> Battle Stance
+            if spellID == 100 or spellID == 6178 or spellID == 11578 then newStance = 2457 
+            -- Intercept (Rank 1-3) -> Berserker Stance
+            elseif spellID == 20252 or spellID == 20616 or spellID == 20617 then newStance = 2458 
+            end
+            
+            if newStance and sourceGUID then
+                local icon = nil
+                if self.AuraInfo and self.AuraInfo[newStance] then icon = self.AuraInfo[newStance].icon end
+                
+                -- Clear conflicting stances (Battle, Berserker, Defensive)
+                self:RemoveBuff(sourceGUID, 2457)
+                self:RemoveBuff(sourceGUID, 2458)
+                self:RemoveBuff(sourceGUID, 71)
+                
+                -- Store the new stance
+                self:StoreBuff(sourceGUID, newStance, {
+                    destGUID = sourceGUID,
+                    spellID = newStance,
+                    icon = icon,
+                    duration = INFINITY,
+                    expirationTime = nil,
+                    startTime = now,
+                    count = 0
+                })
+            end
+        end
+        -- -------------------------------------
+        
         if sourceGUID == self.playerGUID then return end
         
         local idToProcess = spellID
@@ -1715,8 +1746,6 @@ function HEAT:ProcessDataEvents(event, ...)
                         buffDuration = tonumber(spellDataForApplication.duration) 
                     end
                     
-                    --print("Applying Buff:", spellDataForApplication.name, "| ID:", spellID, "| Dest:", destGUID, "| Dur:", buffDuration)
-
                     local expirationTime = (buffDuration == INFINITY) and nil or ((buffDuration > 0) and (now + buffDuration) or nil)
                     
                     self:StoreBuff(destGUID, spellID, {
@@ -1838,10 +1867,9 @@ HeatFrame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "PLAYER_ENTERING_WORLD" then
         init()
         
-    -- 2. Pass Combat/Chat events to your processing function
-    -- This ensures HEAT.storedBuffs gets updated automatically!
-    elseif HEAT.ProcessDataEvents then
-        HEAT:ProcessDataEvents(event, ...)
+    -- 2. Pass Events to the Hostility Processor
+    elseif HEAT.ProcessHostilityEvent then
+        HEAT:ProcessHostilityEvent(event, ...)
     end
 end)
 
