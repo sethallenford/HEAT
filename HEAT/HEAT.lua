@@ -1484,145 +1484,167 @@ end
 ----------------------------------------------------------------------------
 -- FUNCTION DEFINITIONS
 ----------------------------------------------------------------------------
+----------------------------------------------------------------------------
+-- FUNCTION DEFINITIONS
+----------------------------------------------------------------------------
 function HEAT:SendMessage(message)
-        if IsInGroup() then
-            local msg = ("%s#"):format(message)
-            local channel = IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and IsInInstance() and "INSTANCE_CHAT" or "RAID"               
-            if channel and msg then C_ChatInfo.SendAddonMessage(HEAT.prefix, msg, channel) end
-        end
+    if IsInGroup() then
+        local msg = ("%s#"):format(message)
+        local channel = IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and IsInInstance() and "INSTANCE_CHAT" or "RAID"              
+        if channel and msg then C_ChatInfo.SendAddonMessage(HEAT.prefix, msg, channel) end
     end
+end
     
 function HEAT:PlaySound(file, channel)
-        if not file then return end
-        local soundPath = self.SOUND_PREFIX .. file .. self.fileExtension
-        local soundChannel = channel or self.CHANNEL
-        if soundPath and soundChannel then PlaySoundFile(soundPath, soundChannel) end
-    end
+    if not file then return end
+    local soundPath = self.SOUND_PREFIX .. file .. self.fileExtension
+    local soundChannel = channel or self.CHANNEL
+    if soundPath and soundChannel then PlaySoundFile(soundPath, soundChannel) end
+end
     
 function HEAT:RemoveNode(node)
-        if not node or not self.hostilityCache then return end
-        if node.prev then node.prev.next = node.next else self.hostilityCache.head = node.next end
-        if node.next then node.next.prev = node.prev else self.hostilityCache.tail = node.prev end
-        self.hostilityCache.cache[node.guid] = nil
-        if self.hostilityCache.size > 0 then self.hostilityCache.size = self.hostilityCache.size - 1 end
-    end
+    if not node or not self.hostilityCache then return end
+    if node.prev then node.prev.next = node.next else self.hostilityCache.head = node.next end
+    if node.next then node.next.prev = node.prev else self.hostilityCache.tail = node.prev end
+    self.hostilityCache.cache[node.guid] = nil
+    if self.hostilityCache.size > 0 then self.hostilityCache.size = self.hostilityCache.size - 1 end
+end
     
 function HEAT:MoveToHead(node)
-        if not node or not self.hostilityCache or node == self.hostilityCache.head then return end
-        if node.prev then node.prev.next = node.next end
-        if node.next then node.next.prev = node.prev end
-        if self.hostilityCache.tail == node then self.hostilityCache.tail = node.prev end
-        node.prev = nil
-        node.next = self.hostilityCache.head
-        if self.hostilityCache.head then self.hostilityCache.head.prev = node end
-        self.hostilityCache.head = node
-    end
+    if not node or not self.hostilityCache or node == self.hostilityCache.head then return end
+    if node.prev then node.prev.next = node.next end
+    if node.next then node.next.prev = node.prev end
+    if self.hostilityCache.tail == node then self.hostilityCache.tail = node.prev end
+    node.prev = nil
+    node.next = self.hostilityCache.head
+    if self.hostilityCache.head then self.hostilityCache.head.prev = node end
+    self.hostilityCache.head = node
+end
     
 function HEAT:AddNode(guid)
-        if not guid or not self.hostilityCache then return end
-        
-        -- Remove tail if cache is full
-        if self.hostilityCache.size >= self.hostilityCache.maxSize then
-            local tail = self.hostilityCache.tail
-            if tail then self:RemoveNode(tail) end
-        end
-        
-        -- isEnemy is now hardcoded to true
-        local node = { guid = guid, isEnemy = true, buffs = {}, prev = nil, next = self.hostilityCache.head }
-        
-        if self.hostilityCache.head then self.hostilityCache.head.prev = node end
-        self.hostilityCache.head = node
-        if not self.hostilityCache.tail then self.hostilityCache.tail = node end
-        
-        self.hostilityCache.cache[guid] = node
-        self.hostilityCache.size = self.hostilityCache.size + 1
+    if not guid or not self.hostilityCache then return end
+    
+    -- Remove tail if cache is full
+    if self.hostilityCache.size >= self.hostilityCache.maxSize then
+        local tail = self.hostilityCache.tail
+        if tail then self:RemoveNode(tail) end
     end
+    
+    -- isEnemy is now hardcoded to true
+    local node = { guid = guid, isEnemy = true, buffs = {}, prev = nil, next = self.hostilityCache.head }
+    
+    if self.hostilityCache.head then self.hostilityCache.head.prev = node end
+    self.hostilityCache.head = node
+    if not self.hostilityCache.tail then self.hostilityCache.tail = node end
+    
+    self.hostilityCache.cache[guid] = node
+    self.hostilityCache.size = self.hostilityCache.size + 1
+end
     
 function HEAT:IsEnemy(guid, unitFlags)
-        if guid == self.playerGUID then return false end
-        
-        if not guid or not unitFlags then return false end
-        
-        local isHostile = (bit.band(unitFlags, self.FLAGS.REACTION_HOSTILE) > 0)
-        
-        -- Only interact with the cache if the unit is hostile
-        if isHostile then
-            local node = self.hostilityCache.cache[guid]
-            if node then
-                -- It's already in cache, move it to the front
-                self:MoveToHead(node)
-            else
-                self:AddNode(guid)
-            end
+    if guid == self.playerGUID then return false end
+    
+    if not guid or not unitFlags then return false end
+    
+    local isHostile = (bit.band(unitFlags, self.FLAGS.REACTION_HOSTILE) > 0)
+    
+    -- Only interact with the cache if the unit is hostile
+    if isHostile then
+        local node = self.hostilityCache.cache[guid]
+        if node then
+            -- It's already in cache, move it to the front
+            self:MoveToHead(node)
+        else
+            self:AddNode(guid)
         end
-        
-        return isHostile
     end
+    
+    return isHostile
+end
     
 function HEAT:BuildFlags(unit, guid)
-        if not unit or not UnitExists(unit) then return 0 end
-        local unitGUID = guid or UnitGUID(unit)
-        if not unitGUID then return 0 end
-        
-        local flags = 0
-        if UnitIsEnemy("player", unit) then flags = self.FLAGS.REACTION_HOSTILE
-        elseif UnitIsFriend("player", unit) then flags = self.FLAGS.REACTION_FRIENDLY
-        else flags = self.FLAGS.REACTION_NEUTRAL end
-        
-        if string.sub(unitGUID, 1, 3) == "Pet" then flags = bit.bor(flags, self.FLAGS.PET)
-        elseif UnitIsPlayer(unit) then flags = bit.bor(flags, self.FLAGS.PLAYER)
-        else flags = bit.bor(flags, self.FLAGS.NPC) end
-        
-        if UnitPlayerControlled(unit) then flags = bit.bor(flags, self.FLAGS.CONTROL_PLAYER) end
-        
-        if not UnitInParty(unit) and not UnitInRaid(unit) and unit ~= "player" and unit ~= "pet" and unit ~= "vehicle" then
-            flags = bit.bor(flags, self.FLAGS.AFFILIATION_OUTSIDER)
-        end
-        return flags
+    if not unit or not UnitExists(unit) then return 0 end
+    local unitGUID = guid or UnitGUID(unit)
+    if not unitGUID then return 0 end
+    
+    local flags = 0
+    if UnitIsEnemy("player", unit) then flags = self.FLAGS.REACTION_HOSTILE
+    elseif UnitIsFriend("player", unit) then flags = self.FLAGS.REACTION_FRIENDLY
+    else flags = self.FLAGS.REACTION_NEUTRAL end
+    
+    if string.sub(unitGUID, 1, 3) == "Pet" then flags = bit.bor(flags, self.FLAGS.PET)
+    elseif UnitIsPlayer(unit) then flags = bit.bor(flags, self.FLAGS.PLAYER)
+    else flags = bit.bor(flags, self.FLAGS.NPC) end
+    
+    if UnitPlayerControlled(unit) then flags = bit.bor(flags, self.FLAGS.CONTROL_PLAYER) end
+    
+    if not UnitInParty(unit) and not UnitInRaid(unit) and unit ~= "player" and unit ~= "pet" and unit ~= "vehicle" then
+        flags = bit.bor(flags, self.FLAGS.AFFILIATION_OUTSIDER)
     end
+    return flags
+end
     
 function HEAT:UpdateUnitHostility(unit, guid)
-        if not UnitExists(unit) then return 0, false end
-        local unitGUID = guid or UnitGUID(unit)
-        if not unitGUID then return 0, false end
-        
-        local flags = self:BuildFlags(unit, unitGUID)
-        local isHostile = self:IsEnemy(unitGUID, flags)
-        return flags, isHostile
-    end
+    if not UnitExists(unit) then return 0, false end
+    local unitGUID = guid or UnitGUID(unit)
+    if not unitGUID then return 0, false end
+    
+    local flags = self:BuildFlags(unit, unitGUID)
+    local isHostile = self:IsEnemy(unitGUID, flags)
+    return flags, isHostile
+end
     
 function HEAT:UpdateUnitCache(unit)
-        if not unit then return end
-        local guid = UnitGUID(unit)
-        if guid then
-            self.guidToUnit[guid] = unit
+    if not unit then return end
+    local guid = UnitGUID(unit)
+    if guid then
+        -- Ensure table exists
+        if not self.guidToUnit then self.guidToUnit = {} end
+        self.guidToUnit[guid] = unit
+    end
+end
+
+-- NEW FUNCTION: Cleans up the cache when a unit is removed
+function HEAT:ClearUnitCache(unit)
+    if not unit or not self.guidToUnit then return end
+    
+    -- When a unit is removed (e.g. Nameplate), UnitGUID(unit) might return nil.
+    -- We must iterate the cache to find which GUID maps to this unit ID.
+    for guid, cachedUnit in pairs(self.guidToUnit) do
+        if cachedUnit == unit then
+            self.guidToUnit[guid] = nil
+            -- We don't break here just in case multiple GUIDs pointed to the same unit ID (unlikely but safe)
         end
     end
+end
     
 function HEAT:StoreBuff(guid, spellID, data)
-        if not self.storedBuffs[guid] then self.storedBuffs[guid] = {} end
-        self.storedBuffs[guid][spellID] = data
-    end
+    if not self.storedBuffs[guid] then self.storedBuffs[guid] = {} end
+    self.storedBuffs[guid][spellID] = data
+end
     
 function HEAT:RemoveBuff(guid, spellID)
-        if self.storedBuffs[guid] then
-            self.storedBuffs[guid][spellID] = nil
-            if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
-        end
+    if self.storedBuffs[guid] then
+        self.storedBuffs[guid][spellID] = nil
+        if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
     end
+end
     
 function HEAT:ScanAllUnits()
-        if not self.unitTokens then return end
-        for _, unit in ipairs(self.unitTokens) do
-            if UnitExists(unit) then
-                local guid = UnitGUID(unit)
-                if guid then
-                    local flags, isHostile = self:UpdateUnitHostility(unit, guid)
-                    self:ScanUnitBuffs(unit, flags, isHostile, guid)
-                end
+    if not self.unitTokens then return end
+    for _, unit in ipairs(self.unitTokens) do
+        if UnitExists(unit) then
+            local guid = UnitGUID(unit)
+            if guid then
+                -- Update cache for every unit scan
+                self:UpdateUnitCache(unit)
+                
+                local flags, isHostile = self:UpdateUnitHostility(unit, guid)
+                self:ScanUnitBuffs(unit, flags, isHostile, guid)
             end
         end
     end
+end
     
 function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
     local guid = providedGUID or UnitGUID(unit)
@@ -1700,32 +1722,34 @@ function HEAT:ProcessDataEvents(event, ...)
         
         -- Warrior Stance Inference
         if subEvent == "SPELL_CAST_SUCCESS" then
-            local newStance = nil
-            -- Charge (Rank 1-3) -> Battle Stance
-            if spellID == 100 or spellID == 6178 or spellID == 11578 then newStance = 2457 
-            -- Intercept (Rank 1-3) -> Berserker Stance
-            elseif spellID == 20252 or spellID == 20616 or spellID == 20617 then newStance = 2458 
-            end
-            
-            if newStance and sourceGUID then
-                local icon = nil
-                if self.AuraInfo and self.AuraInfo[newStance] then icon = self.AuraInfo[newStance].icon end
+            if sourceGUID ~= self.playerGUID and self:IsEnemy(sourceGUID, sourceFlags) then
+                local newStance = nil
+                -- Charge (Rank 1-3) -> Battle Stance
+                if spellID == 100 or spellID == 6178 or spellID == 11578 then newStance = 2457 
+                -- Intercept (Rank 1-3) -> Berserker Stance
+                elseif spellID == 20252 or spellID == 20616 or spellID == 20617 then newStance = 2458 
+                end
                 
-                -- Clear conflicting stances (Battle, Berserker, Defensive)
-                self:RemoveBuff(sourceGUID, 2457)
-                self:RemoveBuff(sourceGUID, 2458)
-                self:RemoveBuff(sourceGUID, 71)
-                
-                -- Store the new stance
-                self:StoreBuff(sourceGUID, newStance, {
-                    destGUID = sourceGUID,
-                    spellID = newStance,
-                    icon = icon,
-                    duration = INFINITY,
-                    expirationTime = nil,
-                    startTime = now,
-                    count = 0
-                })
+                if newStance and sourceGUID then
+                    local icon = nil
+                    if self.AuraInfo and self.AuraInfo[newStance] then icon = self.AuraInfo[newStance].icon end
+                    
+                    -- Clear conflicting stances (Battle, Berserker, Defensive)
+                    self:RemoveBuff(sourceGUID, 2457)
+                    self:RemoveBuff(sourceGUID, 2458)
+                    self:RemoveBuff(sourceGUID, 71)
+                    
+                    -- Store the new stance
+                    self:StoreBuff(sourceGUID, newStance, {
+                        destGUID = sourceGUID,
+                        spellID = newStance,
+                        icon = icon,
+                        duration = INFINITY,
+                        expirationTime = nil,
+                        startTime = now,
+                        count = 0
+                    })
+                end
             end
         end
         -- -------------------------------------
@@ -1824,6 +1848,15 @@ function HEAT:ProcessHostilityEvent(event, ...)
         -- Handle Zone Changes / Roster updates
         if event == "PLAYER_ENTERING_WORLD" or event == "ARENA_OPPONENT_UPDATE" or event == "GROUP_ROSTER_UPDATE" then
             self:ScanAllUnits()
+            -- Arena Update Specifics: Check for removal
+            if event == "ARENA_OPPONENT_UPDATE" then
+                local unit, type = ...
+                if type == "cleared" or type == "destroyed" then
+                    self:ClearUnitCache(unit)
+                else
+                    self:UpdateUnitCache(unit)
+                end
+            end
             return
         end
         
@@ -1834,7 +1867,16 @@ function HEAT:ProcessHostilityEvent(event, ...)
         elseif event == "PLAYER_FLAGS_CHANGED" then unitToUpdate = "player"
         elseif event == "NAME_PLATE_UNIT_ADDED" or event == "UNIT_FLAGS" or event == "UNIT_FACTION" or event == "UNIT_TARGET" or event == "UNIT_AURA" then
             local unitId = ...
-            if unitId and UnitExists(unitId) then unitToUpdate = unitId end
+            if unitId and UnitExists(unitId) then 
+                unitToUpdate = unitId 
+                -- IMPORTANT: Keep cache updated here
+                self:UpdateUnitCache(unitId)
+            end
+        
+        -- Handle Nameplate Removal to clean cache
+        elseif event == "NAME_PLATE_UNIT_REMOVED" then
+            local unitId = ...
+            if unitId then self:ClearUnitCache(unitId) end
         end
         
         -- Perform the scan if a unit was identified
