@@ -1,6 +1,6 @@
 ## Interface: 11508
 ## Author: Seth
-## Version: @project-version@
+## Version:
 ## Title: HEAT (|cFFFFD700Hostile|r |cFFFF8C00Event|r |cFFFF4500Aura|r |cFFFF0000Tracker|r)
 ## SavedVariables: HEATDB
 ## SavedVariablesByCharacter:
@@ -8,4 +8,5 @@
 ## AllowLoadGameType: vanilla
 
 HEAT.lua
+
 
