@@ -2,9 +2,10 @@
 ## Author: Seth
 ## Version: @project-version@
 ## Title: HEAT (|cFFFFD700Hostile|r |cFFFF8C00Event|r |cFFFF4500Aura|r |cFFFF0000Tracker|r)
-## SavedVariables:
-## SavedVariablesByCharacter: N/A
-## OptionalDeps: N/A
+## SavedVariables: HEATDB
+## SavedVariablesByCharacter:
+## OptionalDeps:
 ## AllowLoadGameType: vanilla
 
 HEAT.lua
+
