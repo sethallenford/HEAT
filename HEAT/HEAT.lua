@@ -32698,7 +32698,7 @@ function HEAT:UpdateUnitCache(unit)
     end
 end
 
--- NEW FUNCTION: Cleans up the cache when a unit is removed
+-- Cleans up the cache when a unit is removed
 function HEAT:ClearUnitCache(unit)
     if not unit or not self.guidToUnit then return end
     
@@ -32769,7 +32769,7 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
                 
                 foundSpells[spellID] = true
                 
-                -- 1. Pass 'isScanned = true' to your helper function
+                -- Pass 'isScanned = true' to your helper function
                 self:StoreBuff(guid, spellID, {
                         destGUID = guid, 
                         duration = calculatedDuration, 
@@ -32784,19 +32784,42 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
         end
     end
     
-    -- 2. Restore the Cleanup Block with the Safety Check
+    -- CLEANUP AND VALIDATION
     if self.storedBuffs[guid] then
+        local inCombat = UnitAffectingCombat(unit) -- Check if unit is fighting
+        
         for spellID, data in pairs(self.storedBuffs[guid]) do
-            -- If the spell is currently stored but was NOT found in this UnitAura scan...
-            if not foundSpells[spellID] then
-                -- ...ONLY remove it if it was previously marked as "scanned" (Visible).
-                -- This protects hidden buffs like Battle Shout (which have isScanned = nil)
-                if data.isScanned then
-                    self.storedBuffs[guid][spellID] = nil
+            local shouldRemove = false
+            
+            -- Standard Cleanup
+            -- If UnitAura scanned it before (isScanned=true) but it's gone now, delete it.
+            if not foundSpells[spellID] and data.isScanned then
+                shouldRemove = true
+            end
+
+            -- Stealth Sanity Check
+            -- If we can see the unit (we are scanning it) AND they are in Combat, 
+            -- they cannot be Stealthed. Force remove the icon.
+            if not shouldRemove and inCombat then
+                local spellInfo = self.AuraInfo[spellID]
+                if spellInfo and spellInfo.name then
+                    if 
+                    spellInfo.name == "Camouflage" or
+                    spellInfo.name == "Hide" or
+                    spellInfo.name == "Prowl" or
+                    spellInfo.name == "Shadowmeld" or
+                    spellInfo.name == "Stealth" or
+                    spellInfo.name == "Subterfuge" then
+                        shouldRemove = true
+                    end
                 end
             end
+            
+            if shouldRemove then
+                self.storedBuffs[guid][spellID] = nil
+            end
         end
-        -- Cleanup if empty
+        -- Final table cleanup
         if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
     end
 end
@@ -32869,7 +32892,6 @@ function HEAT:ProcessDataEvents(event, ...)
             if self.IsEnemy and self:IsEnemy(destGUID, destFlags) and auraType == "BUFF" then
                 
                 if isApplication and spellDataForApplication then
-                    -- [[ CHANGE 2: CHECK SOURCE HERE ]]
                     -- We only ignore applications if the player cast them on the enemy (rare, but safe to filter)
                     if sourceGUID == self.playerGUID then return end
                 
@@ -32882,7 +32904,6 @@ function HEAT:ProcessDataEvents(event, ...)
                     
                     local expirationTime = (buffDuration == INFINITY) and nil or ((buffDuration > 0) and (now + buffDuration) or nil)
                     
-                    -- [[ FIX STACKS ON REFRESH ]]
                     local currentStacks = 1
                     if (subEvent == "SPELL_AURA_APPLIED_DOSE" or subEvent == "SPELL_AURA_REFRESH") and extraSpellID then
                         currentStacks = extraSpellID
