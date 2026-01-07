@@ -12,7 +12,7 @@ local function init()
     
     local MAXSIZE = math.huge;
 
-    -- 1. Setup Basic Addon Table (Safe for SavedVariables)
+    -- Setup Basic Addon Table (Safe for SavedVariables)
     HEAT = HEAT or {}
     
     -- Always reset these (Runtime Caches)
@@ -38,7 +38,7 @@ local function init()
     local defaultBuffs = {}
     local defaultSounds = {}
 
-    -- 3. Populate Lists based on Version
+    -- Populate Lists based on Version
     if currentProject == PROJECT_ERA then
         rawSpellData = [=[
  Increased Spell Hit Chance~28843=136235=-1,30440=136235=30,30441=136235=30^
@@ -15374,7 +15374,7 @@ wr~29820=135871=-1^
             "Ghost Wolf",
             "Innervate",
             "Fear Ward",
-            "Battle Shout" -- Added as requested
+            "Battle Shout"
         }
         
         defaultSounds = {
@@ -31843,7 +31843,7 @@ wr~29820=135871=-1^
             "Avenging Wrath",
             "Divine Illumination",
             "Blessing of Sacrifice",
-            "Battle Stance", -- Added
+            "Battle Stance",
             "Divine Protection",
             "Divine Shield",
             "Hide",
@@ -31892,10 +31892,10 @@ wr~29820=135871=-1^
             "Ghost Wolf",
             "Innervate",
             "Fear Ward",
-            "Battle Shout" -- Added
+            "Battle Shout"
         }
 
-                defaultSounds = { 
+        defaultSounds = { 
             ["EXTRA_STRIKES"] = {
                 ["Hand of Justice"] = {"Hand of Justice", [15600]=false, [15601]=false},
             },
@@ -32459,13 +32459,13 @@ wr~29820=135871=-1^
                 ["Spell Lock"] = {"Spell Lock", [19244]=false, [19647]=false, [19648]=false, [19650]=false, [20433]=false, [20434]=false, [24259]=false}
             }
         }
-        
+
     end
 
-    -- 4. Apply Defaults (The Fix)
+    -- Apply Defaults
     -- We only write to HEAT if it's missing data. This preserves saved settings if you have them.
     
-    -- Fix Nameplate Buffs: Convert List to Table and Assign
+    -- Nameplate Buffs: Convert List to Table and Assign
     if not HEAT.nameplateBuffs or not next(HEAT.nameplateBuffs) then
         HEAT.nameplateBuffs = {}
         if defaultBuffs then
@@ -32475,12 +32475,11 @@ wr~29820=135871=-1^
         end
     end
     
-    -- Fix Sounds
     if not HEAT.soundTable or not next(HEAT.soundTable) then
         HEAT.soundTable = defaultSounds or {}
     end
 
-    -- 5. Process Spell Data (Runtime Only)
+    -- Process Spell Data (Runtime Only)
     if currentProject and rawSpellData and rawSpellData ~= "" then
         local tempDB = { rawSpellData }
         for _, chunk in ipairs(tempDB) do
@@ -32533,7 +32532,7 @@ wr~29820=135871=-1^
         HEAT.soundTable["UNIT_SPELLCAST_SUCCEEDED"] = HEAT.soundTable["SPELL_CAST_SUCCESS"]
     end
 
-    -- 7. Process Parsed Data into AuraInfo
+    -- Process Parsed Data into AuraInfo
     if HEAT.spellData then
         local spellCount = 0
         local parsedSpellData = {}
