@@ -12,32 +12,33 @@ local function init()
     
     local MAXSIZE = math.huge;
 
+    -- 1. Setup Basic Addon Table (Safe for SavedVariables)
     HEAT = HEAT or {}
+    
+    -- Always reset these (Runtime Caches)
     HEAT.spellData = {}
-    HEAT.nameplateBuffs = {} 
-    HEAT.soundTable = {}
     HEAT.storedBuffs = {}
     HEAT.spellIDMap = {} 
     HEAT.AuraInfo = {}   
     HEAT.unitCastDelayed = {}
-    HEAT.playerGUID = UnitGUID("player");
     HEAT.guidToUnit = {} 
     HEAT.unitTokens = {}
     HEAT.hostilityCache = { cache = {}, head = nil, tail = nil, size = 0, maxSize = MAXSIZE };
+    
+    -- Setup Constants
+    HEAT.playerGUID = UnitGUID("player");
     HEAT.SOUND_PREFIX = "Interface\\AddOns\\HEAT\\Sounds\\"
     HEAT.CHANNEL = "Master";
     HEAT.fileExtension = ".ogg";
     HEAT.prefix = "HEAT";
     C_ChatInfo.RegisterAddonMessagePrefix(HEAT.prefix);
 
-    if not HEAT_PerCharDB then 
-        HEAT_PerCharDB = {} 
-    end
-
+    -- 2. Define Variables
+    local rawSpellData = ""
     local defaultBuffs = {}
     local defaultSounds = {}
-    local rawSpellData = ""
 
+    -- 3. Populate Lists based on Version
     if currentProject == PROJECT_ERA then
         rawSpellData = [=[
  Increased Spell Hit Chance~28843=136235=-1,30440=136235=30,30441=136235=30^
@@ -15321,10 +15322,10 @@ scaler test~23618=135805=10^
 trans~23188=136235=-1^
 trans2~23332=136235=-1^
 wr~29820=135871=-1^
-]=]     
+]=]
         defaultBuffs = { 
-            "Battle Stance",
             "Blessing of Sacrifice",
+            "Battle Stance",
             "Divine Protection",
             "Divine Shield",
             "Hide",
@@ -15372,7 +15373,8 @@ wr~29820=135871=-1^
             "Flight Form",
             "Ghost Wolf",
             "Innervate",
-            "Fear Ward"
+            "Fear Ward",
+            "Battle Shout" -- Added as requested
         }
         
         defaultSounds = {
@@ -31841,6 +31843,7 @@ wr~29820=135871=-1^
             "Avenging Wrath",
             "Divine Illumination",
             "Blessing of Sacrifice",
+            "Battle Stance", -- Added
             "Divine Protection",
             "Divine Shield",
             "Hide",
@@ -31888,9 +31891,11 @@ wr~29820=135871=-1^
             "Flight Form",
             "Ghost Wolf",
             "Innervate",
-            "Fear Ward"
-        } 
-        defaultSounds = { 
+            "Fear Ward",
+            "Battle Shout" -- Added
+        }
+
+                defaultSounds = { 
             ["EXTRA_STRIKES"] = {
                 ["Hand of Justice"] = {"Hand of Justice", [15600]=false, [15601]=false},
             },
@@ -32454,8 +32459,28 @@ wr~29820=135871=-1^
                 ["Spell Lock"] = {"Spell Lock", [19244]=false, [19647]=false, [19648]=false, [19650]=false, [20433]=false, [20434]=false, [24259]=false}
             }
         }
+        
     end
 
+    -- 4. Apply Defaults (The Fix)
+    -- We only write to HEAT if it's missing data. This preserves saved settings if you have them.
+    
+    -- Fix Nameplate Buffs: Convert List to Table and Assign
+    if not HEAT.nameplateBuffs or not next(HEAT.nameplateBuffs) then
+        HEAT.nameplateBuffs = {}
+        if defaultBuffs then
+            for _, name in ipairs(defaultBuffs) do
+                HEAT.nameplateBuffs[name] = true
+            end
+        end
+    end
+    
+    -- Fix Sounds
+    if not HEAT.soundTable or not next(HEAT.soundTable) then
+        HEAT.soundTable = defaultSounds or {}
+    end
+
+    -- 5. Process Spell Data (Runtime Only)
     if currentProject and rawSpellData and rawSpellData ~= "" then
         local tempDB = { rawSpellData }
         for _, chunk in ipairs(tempDB) do
@@ -32467,7 +32492,7 @@ wr~29820=135871=-1^
                 end
             end
         end
-        rawSpellData = nil
+        rawSpellData = nil -- clear memory
     end
 
     HEAT.unitTokens = { "playerpet", "target", "focus", "mouseover" }
@@ -32492,7 +32517,7 @@ wr~29820=135871=-1^
         AFFILIATION_OUTSIDER = COMBATLOG_OBJECT_AFFILIATION_OUTSIDER or 0x00000008
     };
                             
-        
+    -- 6. Process Sound Tables
     if HEAT.soundTable["SPELL_AURA_APPLIED"] and not HEAT.soundTable["SPELL_AURA_REFRESH"] then
         HEAT.soundTable["SPELL_AURA_REFRESH"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
         HEAT.soundTable["UNIT_AURA"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
@@ -32500,14 +32525,7 @@ wr~29820=135871=-1^
 
     if HEAT.soundTable["SPELL_CAST_START"] then
         HEAT.soundTable["UNIT_SPELLCAST_START"] = HEAT.soundTable["SPELL_CAST_START"]
-        
-        -- Channel Start
         HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_START"] = HEAT.soundTable["SPELL_CAST_START"] 
-        
-        -- Channel Update (e.g., pushback) - Maps to same data as Start
-        --HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_UPDATE"] = HEAT.soundTable["SPELL_CAST_START"] 
-        
-        -- Channel Stop - Maps to same data as Start so we can look up the Spell ID
         HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_STOP"] = HEAT.soundTable["SPELL_CAST_START"] 
     end
 
@@ -32515,12 +32533,12 @@ wr~29820=135871=-1^
         HEAT.soundTable["UNIT_SPELLCAST_SUCCEEDED"] = HEAT.soundTable["SPELL_CAST_SUCCESS"]
     end
 
+    -- 7. Process Parsed Data into AuraInfo
     if HEAT.spellData then
         local spellCount = 0
         local parsedSpellData = {}
         
         for spellName, dataString in pairs(HEAT.spellData) do
-            -- Parse "ID=Icon=Duration,ID2=Icon2=Dur2"
             for entry in string.gmatch(dataString, "([^,]+)") do
                 local sID, sIcon, sDur = string.match(entry, "(%d+)=(%d+)=([%d%-]+)")
                 if sID then
@@ -32540,7 +32558,6 @@ wr~29820=135871=-1^
                 end
             end
         end
-        
         print(string.format("|cFFFFD700H|r |cFFFF8C00E|r |cFFFF4500A|r |cFFFF0000T|r Successfully built and cached |cFF00FF00%d|r spells.", spellCount))
     end
 
@@ -32559,7 +32576,7 @@ wr~29820=135871=-1^
     end
 
     HEAT.initialized = true
-
+    print("HEAT Initialized.")
 end
 
 ----------------------------------------------------------------------------
