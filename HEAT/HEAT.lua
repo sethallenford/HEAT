@@ -31892,7 +31892,8 @@ wr~29820=135871=-1^
             "Ghost Wolf",
             "Innervate",
             "Fear Ward",
-            "Battle Shout"
+            "Battle Shout",
+            "Slice and Dice"
         }
 
         defaultSounds = { 
@@ -32516,7 +32517,7 @@ wr~29820=135871=-1^
         AFFILIATION_OUTSIDER = COMBATLOG_OBJECT_AFFILIATION_OUTSIDER or 0x00000008
     };
                             
-    -- 6. Process Sound Tables
+    -- Process Sound Tables
     if HEAT.soundTable["SPELL_AURA_APPLIED"] and not HEAT.soundTable["SPELL_AURA_REFRESH"] then
         HEAT.soundTable["SPELL_AURA_REFRESH"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
         HEAT.soundTable["UNIT_AURA"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
