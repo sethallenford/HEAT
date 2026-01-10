@@ -303,23 +303,7 @@ function HEAT:RemoveBuff(guid, spellID)
         if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
     end
 end
-    
-function HEAT:ScanAllUnits()
-    if not self.unitTokens then return end
-    for _, unit in ipairs(self.unitTokens) do
-        if UnitExists(unit) then
-            local guid = UnitGUID(unit)
-            if guid then
-                -- Update cache for every unit scan
-                self:UpdateUnitCache(unit)
-                
-                local flags, isHostile = self:UpdateUnitHostility(unit, guid)
-                self:ScanUnitBuffs(unit, flags, isHostile, guid)
-            end
-        end
-    end
-end
-    
+        
 function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
     local guid = providedGUID or UnitGUID(unit)
     if not guid then return end
@@ -392,6 +376,22 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
             end
         end
         if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
+    end
+end
+
+function HEAT:ScanAllUnits()
+    if not self.unitTokens then return end
+    for _, unit in ipairs(self.unitTokens) do
+        if UnitExists(unit) then
+            local guid = UnitGUID(unit)
+            if guid then
+                -- Update cache for every unit scan
+                self:UpdateUnitCache(unit)
+                
+                local flags, isHostile = self:UpdateUnitHostility(unit, guid)
+                self:ScanUnitBuffs(unit, flags, isHostile, guid)
+            end
+        end
     end
 end
     
@@ -553,9 +553,10 @@ function HEAT:ProcessHostilityEvent(event, ...)
         -- Determine if a specific unit needs scanning based on the event
         local unitToUpdate = nil
         if event == "PLAYER_TARGET_CHANGED" then unitToUpdate = "target"
+        elseif event == "PLAYER_FOCUS_CHANGED" then unitToUpdate = "focus"
         elseif event == "UPDATE_MOUSEOVER_UNIT" then unitToUpdate = "mouseover"
         elseif event == "PLAYER_FLAGS_CHANGED" then unitToUpdate = "player"
-        elseif event == "NAME_PLATE_UNIT_ADDED" or event == "UNIT_FLAGS" or event == "UNIT_FACTION" or event == "UNIT_TARGET" or event == "UNIT_AURA" then
+        elseif event == "NAME_PLATE_UNIT_ADDED" or event == "UNIT_FLAGS" or event == "UNIT_FACTION" or event == "UNIT_TARGET" or event == "UNIT_AURA" or event == "UNIT_SPELLCAST_SUCCEEDED" then
             local unitId = ...
             if unitId and UnitExists(unitId) then 
                 unitToUpdate = unitId 
