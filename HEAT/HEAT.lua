@@ -1754,6 +1754,7 @@ function HEAT:LoadStaticData()
                 ["PvP Trinket"] = {"Trinketed", [28243]=false, [42292]=false},              
                 ["Readiness"] = {"Readiness", [23989]=false},
                 ["Refocus"] = {"Refocus", [24531]=false},
+                ["Restore Mana"] = {"Mana Potion", [436]=false, [437]=false, [438]=false, [2023]=false, [11903]=false, [17530]=false, [17531]=false, [21395]=false, [21396]=false, [28499]=false, [41617]=false, [41618]=false},
                 ["Shadowburn"] = {"Shadowburn", [17877]=false, [18867]=false, [18868]=false, [18869]=false, [18870]=false, [18871]=false, [27263]=false, [29341]=false, [30546]=false},
                 ["Stealth"] = {"Stealth", [1784]=false, [1785]=false, [1786]=false, [1787]=false, [1791]=false, [8822]=false, [30831]=false, [30991]=false, [31526]=false, [31621]=false, [32199]=false, [32615]=false, [34189]=false, [42347]=false, [42866]=false, [42943]=false},
                 ["Thrash"] = {"Thrash", [3391]=false, [3417]=false, [8876]=false, [12787]=false, [21919]=false},
