@@ -317,34 +317,33 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
             
     local now = GetTime()
     local foundSpells = {}
-    local filterList = {"HELPFUL"}
     
-    for _, filter in ipairs(filterList) do
-        for i = 1, 40 do
-            local name, icon, count, _, duration, expirationTime, source, _, _, spellID = UnitAura(unit, i, filter)
-            if not name then break end 
+    -- Optimized: No need for a loop if only checking HELPFUL
+    for i = 1, 40 do
+        local name, icon, count, _, duration, expirationTime, source, _, _, spellID = UnitAura(unit, i, "HELPFUL")
+        if not name then break end 
+        
+        -- We have the name from UnitAura, use it!
+        if spellID and self.AuraInfo[spellID] then
+            foundSpells[spellID] = true
             
-            if spellID and self.AuraInfo[spellID] then
-                local calculatedDuration = duration
-                if calculatedDuration == 0 then calculatedDuration = -1 end
-                
-                foundSpells[spellID] = true
-                
-                local stackCount = count or 0
-                if stackCount == 0 then stackCount = 1 end
-                                
-                self:StoreBuff(guid, spellID, {
-                        destGUID = guid, 
-                        icon = icon,
-                        duration = calculatedDuration, 
-                        expirationTime = expirationTime,
-                        spellID = spellID,
-                        name = spellName, 
-                        startTime = (expirationTime and expirationTime > 0) and (expirationTime - duration) or now,
-                        stacks = stackCount,
-                        isScanned = true 
-                })
-            end
+            local calculatedDuration = duration
+            if calculatedDuration == 0 then calculatedDuration = -1 end
+            
+            local stackCount = count or 0
+            if stackCount == 0 then stackCount = 1 end
+                            
+            self:StoreBuff(guid, spellID, {
+                destGUID = guid, 
+                icon = icon,
+                duration = calculatedDuration, 
+                expirationTime = expirationTime,
+                spellID = spellID,
+                name = name, -- FIX: Use the 'name' variable from UnitAura
+                startTime = (expirationTime and expirationTime > 0) and (expirationTime - duration) or now,
+                stacks = stackCount,
+                isScanned = true 
+            })
         end
     end
     
@@ -363,9 +362,10 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
             if not shouldRemove and inCombat then
                 local spellInfo = self.AuraInfo[spellID]
                 if spellInfo and spellInfo.name then
-                    if spellInfo.name == "Camouflage" or spellInfo.name == "Hide" or
-                       spellInfo.name == "Prowl" or spellInfo.name == "Shadowmeld" or
-                       spellInfo.name == "Stealth" or spellInfo.name == "Subterfuge" then
+                    -- Optimized lookup
+                    local n = spellInfo.name
+                    if n == "Camouflage" or n == "Hide" or n == "Prowl" or 
+                       n == "Shadowmeld" or n == "Stealth" or n == "Subterfuge" then
                         shouldRemove = true
                     end
                 end
@@ -375,6 +375,7 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
                 self.storedBuffs[guid][spellID] = nil
             end
         end
+        -- Clean up empty tables
         if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
     end
 end
@@ -385,9 +386,7 @@ function HEAT:ScanAllUnits()
         if UnitExists(unit) then
             local guid = UnitGUID(unit)
             if guid then
-                -- Update cache for every unit scan
                 self:UpdateUnitCache(unit)
-                
                 local flags, isHostile = self:UpdateUnitHostility(unit, guid)
                 self:ScanUnitBuffs(unit, flags, isHostile, guid)
             end
@@ -397,10 +396,11 @@ end
     
 function HEAT:ProcessDataEvents(event, ...)
     local now = GetTime()
-    local INFINITY = -1
+    local INFINITY = math.huge -- Use Lua standard
     
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        local _, subEvent, _, sourceGUID, _, sourceFlags, _, destGUID, destName, destFlags, _, spellID, _, _, auraType, extraSpellID, durationMS = CombatLogGetCurrentEventInfo()
+        -- FIX: Added spellName to capture (Arg 13)
+        local _, subEvent, _, sourceGUID, _, sourceFlags, _, destGUID, destName, destFlags, _, spellID, spellName, _, auraType, extraSpellID, durationMS = CombatLogGetCurrentEventInfo()
         
         -- Cleanup on Death
         if subEvent == "UNIT_DIED" or subEvent == "UNIT_DESTROYED" then
@@ -418,15 +418,16 @@ function HEAT:ProcessDataEvents(event, ...)
         if subEvent == "SPELL_CAST_SUCCESS" then
             if sourceGUID ~= self.playerGUID and self:IsEnemy(sourceGUID, sourceFlags) then
                 local newStance = nil
-                -- Charge (Rank 1-3) -> Battle Stance
+                -- Charge -> Battle Stance
                 if spellID == 100 or spellID == 6178 or spellID == 11578 then newStance = 2457 
-                -- Intercept (Rank 1-3) -> Berserker Stance
+                -- Intercept -> Berserker Stance
                 elseif spellID == 20252 or spellID == 20616 or spellID == 20617 then newStance = 2458 
                 end
                 
                 if newStance and sourceGUID then
-                    local icon = nil
-                    if self.AuraInfo and self.AuraInfo[newStance] then icon = self.AuraInfo[newStance].icon end
+                    local stanceInfo = self.AuraInfo[newStance]
+                    -- FIX: Fetch the name of the STANCE, not the spell cast (Charge)
+                    local realStanceName = GetSpellInfo(newStance) 
                     
                     self:RemoveBuff(sourceGUID, 2457) -- Battle
                     self:RemoveBuff(sourceGUID, 2458) -- Berserker
@@ -435,8 +436,8 @@ function HEAT:ProcessDataEvents(event, ...)
                     self:StoreBuff(sourceGUID, newStance, {
                         destGUID = sourceGUID,
                         spellID = newStance,
-                        name = spellName, 
-                        icon = icon,
+                        name = realStanceName,
+                        icon = stanceInfo and stanceInfo.icon,
                         duration = INFINITY,
                         expirationTime = nil,
                         startTime = now,
@@ -464,9 +465,7 @@ function HEAT:ProcessDataEvents(event, ...)
                     if sourceGUID == self.playerGUID then return end
                 
                     local buffDuration = INFINITY
-                    if durationMS and durationMS > 0 then 
-                        buffDuration = durationMS
-                    elseif spellDataForApplication.duration and spellDataForApplication.duration ~= INFINITY then 
+                    if spellDataForApplication.duration and spellDataForApplication.duration ~= -1 then 
                         buffDuration = tonumber(spellDataForApplication.duration) 
                     end
                     
@@ -489,7 +488,6 @@ function HEAT:ProcessDataEvents(event, ...)
                     })
                 elseif (isRemoval or isDispel) and spellDataForLookup then
                     self:RemoveBuff(destGUID, idToProcess)
-                    -- self:SendMessage("REMOVED", destGUID, idToProcess)
                 end
             end
         end
