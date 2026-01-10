@@ -1,7 +1,7 @@
 HEAT = HEAT or { initialized = false }
 
-local PROJECT_ERA = WOW_PROJECT_CLASSIC -- 1.15.8.64907 
-local PROJECT_TBC = WOW_PROJECT_BURNING_CRUSADE_CLASSIC -- 2.5.5.65000
+local PROJECT_ERA = WOW_PROJECT_CLASSIC -- 1.15.8.65300 
+local PROJECT_TBC = WOW_PROJECT_BURNING_CRUSADE_CLASSIC -- 2.5.5.65295
 local PROJECT_WOTLK = WOW_PROJECT_WRATH_CLASSIC -- 3.80.0.64859
 local PROJECT_CATA = WOW_PROJECT_CATACLYSM_CLASSIC -- 4.4.2.60895
 local PROJECT_MOP = WOW_PROJECT_MISTS_CLASSIC -- 5.5.3.64857
@@ -441,7 +441,7 @@ function HEAT:ProcessDataEvents(event, ...)
                         duration = INFINITY,
                         expirationTime = nil,
                         startTime = now,
-                        count = 0
+                        stacks = 0
                     })
                 end
             end
@@ -1235,6 +1235,7 @@ function HEAT:LoadStaticData()
             "Petrification",
             "Presence of Mind",
             "Prowl",
+            "Rapid Fire",
             "Recklessness",
             "Retaliation",
             "Shadowmeld",
