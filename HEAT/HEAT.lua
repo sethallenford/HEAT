@@ -12,7 +12,6 @@ local function init()
     
     local MAXSIZE = math.huge;
 
-    -- Setup Basic Addon Table (Safe for SavedVariables)
     HEAT = HEAT or {}
     
     -- Always reset these (Runtime Caches)
@@ -34,6 +33,569 @@ local function init()
     C_ChatInfo.RegisterAddonMessagePrefix(HEAT.prefix);
 
     -- 2. Define Variables
+    -- Data population is now handled by HEAT:LoadStaticData() at the bottom of the file
+    local rawSpellData, defaultBuffs, defaultSounds = HEAT:LoadStaticData()
+
+    -- Nameplate Buffs: Convert List to Table and Assign
+    if not HEAT.nameplateBuffs or not next(HEAT.nameplateBuffs) then
+        HEAT.nameplateBuffs = {}
+        if defaultBuffs then
+            for _, name in ipairs(defaultBuffs) do
+                HEAT.nameplateBuffs[name] = true
+            end
+        end
+    end
+    
+    if not HEAT.soundTable or not next(HEAT.soundTable) then
+        HEAT.soundTable = defaultSounds or {}
+    end
+
+    -- Process Spell Data (Runtime Only)
+    if currentProject and rawSpellData and rawSpellData ~= "" then
+        local tempDB = { rawSpellData }
+        for _, chunk in ipairs(tempDB) do
+            chunk = chunk .. "^"
+            for name, info in chunk:gmatch("(.-)~([^^]+)^") do
+                name = name:gsub("[\n\r]", "")
+                if name and name ~= "" then
+                    HEAT.spellData[name] = info
+                end
+            end
+        end
+        rawSpellData = nil -- clear memory
+    end
+
+    HEAT.unitTokens = { "playerpet", "target", "focus", "mouseover" }
+    for i = 1, 5 do table.insert(HEAT.unitTokens, "boss"..i) end
+    for i = 1, 5 do table.insert(HEAT.unitTokens, "arena"..i) end
+    for i = 1, 5 do table.insert(HEAT.unitTokens, "arenapet"..i) end
+    for i = 1, 40 do table.insert(HEAT.unitTokens, "nameplate"..i) end
+    for i = 1, 4 do table.insert(HEAT.unitTokens, "party"..i) end
+    for i = 1, 4 do table.insert(HEAT.unitTokens, "partypet"..i) end
+    for i = 1, 40 do table.insert(HEAT.unitTokens, "raid"..i) end
+    for i = 1, 40 do table.insert(HEAT.unitTokens, "raidpet"..i) end
+    
+    HEAT.FLAGS = {
+        PLAYER = COMBATLOG_OBJECT_TYPE_PLAYER or 0x00000400,
+        NPC = COMBATLOG_OBJECT_TYPE_NPC or 0x00000800,
+        PET = COMBATLOG_OBJECT_TYPE_PET or 0x00002000,
+        GUARDIAN = COMBATLOG_OBJECT_TYPE_GUARDIAN or 0x00004000,
+        CONTROL_PLAYER = COMBATLOG_OBJECT_CONTROL_PLAYER or 0x00000100,
+        REACTION_FRIENDLY = COMBATLOG_OBJECT_REACTION_FRIENDLY or 0x00000010,
+        REACTION_NEUTRAL  = COMBATLOG_OBJECT_REACTION_NEUTRAL  or 0x00000020,
+        REACTION_HOSTILE  = COMBATLOG_OBJECT_REACTION_HOSTILE  or 0x00000040,
+        AFFILIATION_OUTSIDER = COMBATLOG_OBJECT_AFFILIATION_OUTSIDER or 0x00000008
+    };
+                            
+    -- Process Sound Tables
+    if HEAT.soundTable["SPELL_AURA_APPLIED"] and not HEAT.soundTable["SPELL_AURA_REFRESH"] then
+        HEAT.soundTable["SPELL_AURA_REFRESH"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
+        HEAT.soundTable["UNIT_AURA"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
+    end
+
+    if HEAT.soundTable["SPELL_CAST_START"] then
+        HEAT.soundTable["UNIT_SPELLCAST_START"] = HEAT.soundTable["SPELL_CAST_START"]
+        HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_START"] = HEAT.soundTable["SPELL_CAST_START"] 
+        HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_STOP"] = HEAT.soundTable["SPELL_CAST_START"] 
+    end
+
+    if HEAT.soundTable["SPELL_CAST_SUCCESS"] then
+        HEAT.soundTable["UNIT_SPELLCAST_SUCCEEDED"] = HEAT.soundTable["SPELL_CAST_SUCCESS"]
+    end
+
+    -- Process Parsed Data into AuraInfo
+    if HEAT.spellData then
+        local spellCount = 0
+        local parsedSpellData = {}
+        
+        for spellName, dataString in pairs(HEAT.spellData) do
+            for entry in string.gmatch(dataString, "([^,]+)") do
+                local sID, sIcon, sDur = string.match(entry, "(%d+)=(%d+)=([%d%-]+)")
+                if sID then
+                    local id = tonumber(sID)
+                    local icon = tonumber(sIcon)
+                    local dur = tonumber(sDur)
+                    
+                    parsedSpellData[id] = dur
+                    
+                    HEAT.AuraInfo[id] = {
+                        spellID = id,
+                        icon = icon,
+                        name = spellName,
+                        duration = dur
+                    }
+                    spellCount = spellCount + 1
+                end
+            end
+        end
+        print(string.format("|cFFFFD700H|r |cFFFF8C00E|r |cFFFF4500A|r |cFFFF0000T|r Successfully built and cached |cFF00FF00%d|r spells.", spellCount))
+    end
+
+    -- Process Sound Tables (FIXED LOOP)
+    if HEAT.soundTable then
+        for eventType, eventSpells in pairs(HEAT.soundTable) do
+            HEAT.spellIDMap[eventType] = {}
+            for key, data in pairs(eventSpells) do
+                -- We now support using the Key as the sound filename (e.g. ["Feign Death"] = {...})
+                -- Or finding it at index 1 (legacy support)
+                if type(data) == "table" then
+                    local soundFile
+                    if type(key) == "string" then
+                        soundFile = key
+                    else
+                        soundFile = data[1]
+                    end
+                    
+                    if soundFile then
+                        for id, requireDst in pairs(data) do
+                            if type(id) == "number" and id ~= 1 then
+                                HEAT.spellIDMap[eventType][id] = { spellName = soundFile, requireDst = requireDst }
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    HEAT.initialized = true
+    print("HEAT Initialized.")
+end
+   
+----------------------------------------------------------------------------
+-- FUNCTION DEFINITIONS
+----------------------------------------------------------------------------
+function HEAT:SendMessage(message)
+    if IsInGroup() then
+        local msg = ("%s#"):format(message)
+        local channel = IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and IsInInstance() and "INSTANCE_CHAT" or "RAID"              
+        if channel and msg then C_ChatInfo.SendAddonMessage(HEAT.prefix, msg, channel) end
+    end
+end
+    
+function HEAT:PlaySound(file, channel)
+    if not file then return end
+    local soundPath = self.SOUND_PREFIX .. file .. self.fileExtension
+    local soundChannel = channel or self.CHANNEL
+    if soundPath and soundChannel then PlaySoundFile(soundPath, soundChannel) end
+end
+    
+function HEAT:RemoveNode(node)
+    if not node or not self.hostilityCache then return end
+    if node.prev then node.prev.next = node.next else self.hostilityCache.head = node.next end
+    if node.next then node.next.prev = node.prev else self.hostilityCache.tail = node.prev end
+    self.hostilityCache.cache[node.guid] = nil
+    if self.hostilityCache.size > 0 then self.hostilityCache.size = self.hostilityCache.size - 1 end
+end
+    
+function HEAT:MoveToHead(node)
+    if not node or not self.hostilityCache or node == self.hostilityCache.head then return end
+    if node.prev then node.prev.next = node.next end
+    if node.next then node.next.prev = node.prev end
+    if self.hostilityCache.tail == node then self.hostilityCache.tail = node.prev end
+    node.prev = nil
+    node.next = self.hostilityCache.head
+    if self.hostilityCache.head then self.hostilityCache.head.prev = node end
+    self.hostilityCache.head = node
+end
+    
+function HEAT:AddNode(guid)
+    if not guid or not self.hostilityCache then return end
+    
+    -- Remove tail if cache is full
+    if self.hostilityCache.size >= self.hostilityCache.maxSize then
+        local tail = self.hostilityCache.tail
+        if tail then self:RemoveNode(tail) end
+    end
+    
+    -- isEnemy is now hardcoded to true
+    local node = { guid = guid, isEnemy = true, buffs = {}, prev = nil, next = self.hostilityCache.head }
+    
+    if self.hostilityCache.head then self.hostilityCache.head.prev = node end
+    self.hostilityCache.head = node
+    if not self.hostilityCache.tail then self.hostilityCache.tail = node end
+    
+    self.hostilityCache.cache[guid] = node
+    self.hostilityCache.size = self.hostilityCache.size + 1
+end
+
+function HEAT:IsEnemy(guid, unitFlags)
+    if guid == self.playerGUID then return false end
+    
+    if not guid or not unitFlags then return false end
+    
+    local isHostile = (bit.band(unitFlags, self.FLAGS.REACTION_HOSTILE) > 0)
+    
+    -- Only interact with the cache if the unit is hostile
+    if isHostile then
+        local node = self.hostilityCache.cache[guid]
+        if node then
+            -- It's already in cache, move it to the front
+            self:MoveToHead(node)
+        else
+            self:AddNode(guid)
+        end
+    end
+    
+    return isHostile
+end
+    
+function HEAT:BuildFlags(unit, guid)
+    if not unit or not UnitExists(unit) then return 0 end
+    local unitGUID = guid or UnitGUID(unit)
+    if not unitGUID then return 0 end
+    
+    local flags = 0
+    if UnitIsEnemy("player", unit) then flags = self.FLAGS.REACTION_HOSTILE
+    elseif UnitIsFriend("player", unit) then flags = self.FLAGS.REACTION_FRIENDLY
+    else flags = self.FLAGS.REACTION_NEUTRAL end
+    
+    if string.sub(unitGUID, 1, 3) == "Pet" then flags = bit.bor(flags, self.FLAGS.PET)
+    elseif UnitIsPlayer(unit) then flags = bit.bor(flags, self.FLAGS.PLAYER)
+    else flags = bit.bor(flags, self.FLAGS.NPC) end
+    
+    if UnitPlayerControlled(unit) then flags = bit.bor(flags, self.FLAGS.CONTROL_PLAYER) end
+    
+    if not UnitInParty(unit) and not UnitInRaid(unit) and unit ~= "player" and unit ~= "pet" and unit ~= "vehicle" then
+        flags = bit.bor(flags, self.FLAGS.AFFILIATION_OUTSIDER)
+    end
+    return flags
+end
+    
+function HEAT:UpdateUnitHostility(unit, guid)
+    if not UnitExists(unit) then return 0, false end
+    local unitGUID = guid or UnitGUID(unit)
+    if not unitGUID then return 0, false end
+    
+    local flags = self:BuildFlags(unit, unitGUID)
+    local isHostile = self:IsEnemy(unitGUID, flags)
+    return flags, isHostile
+end
+    
+function HEAT:UpdateUnitCache(unit)
+    if not unit then return end
+    local guid = UnitGUID(unit)
+    if guid then
+        -- Ensure table exists
+        if not self.guidToUnit then self.guidToUnit = {} end
+        self.guidToUnit[guid] = unit
+    end
+end
+
+-- Cleans up the cache when a unit is removed
+function HEAT:ClearUnitCache(unit)
+    if not unit or not self.guidToUnit then return end
+    
+    -- When a unit is removed (e.g. Nameplate), UnitGUID(unit) might return nil.
+    -- We must iterate the cache to find which GUID maps to this unit ID.
+    for guid, cachedUnit in pairs(self.guidToUnit) do
+        if cachedUnit == unit then
+            self.guidToUnit[guid] = nil
+            -- We don't break here just in case multiple GUIDs pointed to the same unit ID (unlikely but safe)
+        end
+    end
+end
+    
+function HEAT:StoreBuff(guid, spellID, data)
+    if not self.storedBuffs[guid] then self.storedBuffs[guid] = {} end
+    self.storedBuffs[guid][spellID] = data
+end
+    
+function HEAT:RemoveBuff(guid, spellID)
+    if self.storedBuffs[guid] then
+        self.storedBuffs[guid][spellID] = nil
+        if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
+    end
+end
+    
+function HEAT:ScanAllUnits()
+    if not self.unitTokens then return end
+    for _, unit in ipairs(self.unitTokens) do
+        if UnitExists(unit) then
+            local guid = UnitGUID(unit)
+            if guid then
+                -- Update cache for every unit scan
+                self:UpdateUnitCache(unit)
+                
+                local flags, isHostile = self:UpdateUnitHostility(unit, guid)
+                self:ScanUnitBuffs(unit, flags, isHostile, guid)
+            end
+        end
+    end
+end
+    
+function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
+    local guid = providedGUID or UnitGUID(unit)
+    if not guid then return end
+    
+    local isEnemy = providedIsEnemy
+    if isEnemy == nil then
+        local flags = providedFlags or self:BuildFlags(unit, guid)
+        isEnemy = self.IsEnemy and self:IsEnemy(guid, flags)
+    end
+    
+    if not isEnemy then return end
+            
+    local now = GetTime()
+    local foundSpells = {}
+    local filterList = {"HELPFUL", "HARMFUL"}
+    
+    for _, filter in ipairs(filterList) do
+        for i = 1, 40 do
+            local name, icon, count, _, duration, expirationTime, source, _, _, spellID = UnitAura(unit, i, filter)
+            if not name then break end 
+            
+            local skip = (filter == "HARMFUL") 
+            
+            if not skip and spellID and self.AuraInfo[spellID] then
+                local calculatedDuration = duration
+                if calculatedDuration == 0 then calculatedDuration = -1 end
+                
+                foundSpells[spellID] = true
+                                
+                self:StoreBuff(guid, spellID, {
+                        destGUID = guid, 
+                        duration = calculatedDuration, 
+                        expirationTime = expirationTime,
+                        spellID = spellID, 
+                        icon = icon,
+                        startTime = (expirationTime and expirationTime > 0) and (expirationTime - duration) or now,
+                        stacks = count or 0,
+                        isScanned = true 
+                })
+            end
+        end
+    end
+    
+    -- Cleanup Logic
+    if self.storedBuffs[guid] then
+        local inCombat = UnitAffectingCombat(unit)
+        
+        for spellID, data in pairs(self.storedBuffs[guid]) do
+            local shouldRemove = false
+            
+            if not foundSpells[spellID] and data.isScanned then
+                shouldRemove = true
+            end
+
+            -- Stealth Sanity Check
+            if not shouldRemove and inCombat then
+                local spellInfo = self.AuraInfo[spellID]
+                if spellInfo and spellInfo.name then
+                    if spellInfo.name == "Camouflage" or spellInfo.name == "Hide" or
+                       spellInfo.name == "Prowl" or spellInfo.name == "Shadowmeld" or
+                       spellInfo.name == "Stealth" or spellInfo.name == "Subterfuge" then
+                        shouldRemove = true
+                    end
+                end
+            end
+            
+            if shouldRemove then
+                self.storedBuffs[guid][spellID] = nil
+            end
+        end
+        if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
+    end
+end
+    
+function HEAT:ProcessDataEvents(event, ...)
+    local now = GetTime()
+    local INFINITY = -1
+    
+    if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+        -- Note: 'extraSpellID' maps to the 16th argument. 
+        -- For DOSE/REFRESH events, this is the Amount/Stacks.
+        -- For DISPEL events, this is the ID of the spell being removed.
+        local _, subEvent, _, sourceGUID, _, sourceFlags, _, destGUID, destName, destFlags, _, spellID, _, _, auraType, extraSpellID, durationMS = CombatLogGetCurrentEventInfo()
+        
+        -- Cleanup on Death
+        if subEvent == "UNIT_DIED" or subEvent == "UNIT_DESTROYED" then
+            if sourceGUID then
+                self.storedBuffs[sourceGUID] = nil
+                self.unitCastDelayed[sourceGUID] = nil 
+                if self.hostilityCache and self.hostilityCache.cache[sourceGUID] then
+                    self:RemoveNode(self.hostilityCache.cache[sourceGUID])
+                end
+            end
+            return
+        end
+        
+        -- Warrior Stance Inference
+        if subEvent == "SPELL_CAST_SUCCESS" then
+            if sourceGUID ~= self.playerGUID and self:IsEnemy(sourceGUID, sourceFlags) then
+                local newStance = nil
+                -- Charge (Rank 1-3) -> Battle Stance
+                if spellID == 100 or spellID == 6178 or spellID == 11578 then newStance = 2457 
+                -- Intercept (Rank 1-3) -> Berserker Stance
+                elseif spellID == 20252 or spellID == 20616 or spellID == 20617 then newStance = 2458 
+                end
+                
+                if newStance and sourceGUID then
+                    local icon = nil
+                    if self.AuraInfo and self.AuraInfo[newStance] then icon = self.AuraInfo[newStance].icon end
+                    
+                    self:RemoveBuff(sourceGUID, 2457)
+                    self:RemoveBuff(sourceGUID, 2458)
+                    self:RemoveBuff(sourceGUID, 71) -- Defensive Stance
+                    
+                    self:StoreBuff(sourceGUID, newStance, {
+                        destGUID = sourceGUID,
+                        spellID = newStance,
+                        icon = icon,
+                        duration = INFINITY,
+                        expirationTime = nil,
+                        startTime = now,
+                        count = 0
+                    })
+                end
+            end
+        end
+
+        local idToProcess = spellID
+        local isApplication = subEvent == "SPELL_AURA_APPLIED" or subEvent == "SPELL_AURA_REFRESH" or subEvent == "SPELL_AURA_APPLIED_DOSE"
+        local isRemoval = subEvent == "SPELL_AURA_REMOVED" or subEvent == "SPELL_AURA_BROKEN" or subEvent == "SPELL_AURA_BROKEN_SPELL" or subEvent == "SPELL_AURA_REMOVED_DOSE"
+        local isDispel = subEvent == "SPELL_DISPEL" or subEvent == "SPELL_STOLEN"
+        
+        if isDispel and extraSpellID and extraSpellID ~= 0 then idToProcess = extraSpellID end
+        
+        local spellDataForLookup = self.AuraInfo[idToProcess]
+        local spellDataForApplication = self.AuraInfo[spellID]
+        
+        if (isApplication and spellDataForApplication) or ((isRemoval or isDispel) and spellDataForLookup) then
+            
+            if self.IsEnemy and self:IsEnemy(destGUID, destFlags) and auraType == "BUFF" then
+                
+                if isApplication and spellDataForApplication then
+                    -- We only ignore applications if the player cast them on the enemy (rare, but safe to filter)
+                    if sourceGUID == self.playerGUID then return end
+                
+                    local buffDuration = INFINITY
+                    if durationMS and durationMS > 0 then 
+                        buffDuration = durationMS
+                    elseif spellDataForApplication.duration and spellDataForApplication.duration ~= INFINITY then 
+                        buffDuration = tonumber(spellDataForApplication.duration) 
+                    end
+                    
+                    local expirationTime = (buffDuration == INFINITY) and nil or ((buffDuration > 0) and (now + buffDuration) or nil)
+                    
+                    local currentStacks = 1
+                    if (subEvent == "SPELL_AURA_APPLIED_DOSE" or subEvent == "SPELL_AURA_REFRESH") and extraSpellID then
+                        currentStacks = extraSpellID
+                    end
+                    
+                    self:StoreBuff(destGUID, spellID, {
+                            destGUID = destGUID, 
+                            duration = buffDuration, 
+                            expirationTime = expirationTime,
+                            spellID = spellID, 
+                            icon = spellDataForApplication.icon, 
+                            startTime = now,
+                            stacks = currentStacks 
+                    })
+                    
+                    self:SendMessage("APPLIED", destGUID, spellID, (expirationTime or 0))
+                    
+                elseif (isRemoval or isDispel) and spellDataForLookup then
+                    -- Note: We DO NOT check sourceGUID here. 
+                    -- If Player dispels Enemy, we want to remove the buff immediately.
+                    
+                    self:RemoveBuff(destGUID, idToProcess)
+                    self:SendMessage("REMOVED", destGUID, idToProcess)
+                end
+            end
+        end
+        
+    --[[elseif event == "CHAT_MSG_ADDON" then
+        -- (This section looked fine, keep it as is)
+        local messagePrefix, msg, _, sender = ...
+        if messagePrefix == self.prefix and sender ~= UnitName("player") and msg then
+            local eventType, data = msg:match("([^#]+)#(.*)")
+            if not (eventType and data) then return end
+            
+            local guid = data:match("([^#]+)")
+            if guid and guid == UnitGUID("target") then return end 
+            
+            if eventType == "APPLIED" then
+                local _, spellID, expiration = data:match("([^#]+)#([^#]+)#([^#]+)")
+                spellID = tonumber(spellID)
+                expiration = tonumber(expiration)
+                if not (guid and spellID and expiration) then return end
+                
+                local spell = self.AuraInfo[spellID]
+                if not spell then return end
+                local expirationTime = (expiration == 0) and nil or expiration
+                local duration = INFINITY
+                if expirationTime then duration = expirationTime - now; if duration < 0 then duration = 0 end
+                elseif spell and spell.duration ~= INFINITY then duration = spell.duration end
+                
+                self:StoreBuff(guid, spellID, {
+                        destGUID = guid, duration = duration, expirationTime = expirationTime,
+                        spellID = spellID, icon = spell.icon, startTime = now
+                })
+                
+            elseif eventType == "REMOVED" then
+                local _, spellID = data:match("([^#]+)#([^#]+)")
+                spellID = tonumber(spellID)
+                if guid and spellID then self:RemoveBuff(guid, spellID) end
+            end
+        end]]
+    end
+end
+
+function HEAT:ProcessHostilityEvent(event, ...)
+        if not self.hostilityCache then return end
+        
+        -- Process raw data (Combat Log / Chat Sync)
+        self:ProcessDataEvents(event, ...)
+        
+        -- Handle Zone Changes / Roster updates
+        if event == "PLAYER_ENTERING_WORLD" or event == "ARENA_OPPONENT_UPDATE" or event == "GROUP_ROSTER_UPDATE" then
+            self:ScanAllUnits()
+            -- Arena Update Specifics: Check for removal
+            if event == "ARENA_OPPONENT_UPDATE" then
+                local unit, type = ...
+                if type == "cleared" or type == "destroyed" then
+                    self:ClearUnitCache(unit)
+                else
+                    self:UpdateUnitCache(unit)
+                end
+            end
+            return
+        end
+        
+        -- Determine if a specific unit needs scanning based on the event
+        local unitToUpdate = nil
+        if event == "PLAYER_TARGET_CHANGED" then unitToUpdate = "target"
+        elseif event == "UPDATE_MOUSEOVER_UNIT" then unitToUpdate = "mouseover"
+        elseif event == "PLAYER_FLAGS_CHANGED" then unitToUpdate = "player"
+        elseif event == "NAME_PLATE_UNIT_ADDED" or event == "UNIT_FLAGS" or event == "UNIT_FACTION" or event == "UNIT_TARGET" or event == "UNIT_AURA" then
+            local unitId = ...
+            if unitId and UnitExists(unitId) then 
+                unitToUpdate = unitId 
+                -- IMPORTANT: Keep cache updated here
+                self:UpdateUnitCache(unitId)
+            end
+        
+        -- Handle Nameplate Removal to clean cache
+        elseif event == "NAME_PLATE_UNIT_REMOVED" then
+            local unitId = ...
+            if unitId then self:ClearUnitCache(unitId) end
+        end
+        
+        -- Perform the scan if a unit was identified
+        if unitToUpdate then
+            local guid = UnitGUID(unitToUpdate)
+            if guid then
+                local flags, isHostile = self:UpdateUnitHostility(unitToUpdate, guid)
+                self:ScanUnitBuffs(unitToUpdate, flags, isHostile, guid)
+            end
+        end
+end
+
+----------------------------------------------------------------------------
+-- STATIC DATA LOADER
+----------------------------------------------------------------------------
+function HEAT:LoadStaticData()
     local rawSpellData = ""
     local defaultBuffs = {}
     local defaultSounds = {}
@@ -15425,7 +15987,7 @@ local function init()
                 ["Fade"] = {"Fade", [586]=false, [1265]=false, [9578]=false, [9579]=false, [9580]=false, [9581]=false, [9592]=false, [9593]=false, [10941]=false, [10942]=false, [10943]=false, [10944]=false, [12685]=false, [20672]=false},
                 ["Faerie Fire"] = {"Faerie Fire", [770]=false, [778]=false, [784]=false, [793]=false, [1070]=false, [1414]=false, [1415]=false, [1416]=false, [2889]=false, [6950]=false, [9749]=false, [9907]=false, [13424]=false, [13752]=false, [16498]=false, [20656]=false, [21670]=false},
                 ["Fear Ward"] = {"Fear Ward", [6346]=false, [19337]=false, [459699]=false},
-                ["Feedback"] = {"Feedback", [6347]=false, [13896]=false, [19267]=false, [19268]=false, [19269]=false, [19270]=false, [19271]=false, [19273]=false, [19274]=false, [19275]=false, [19345]=false, [19346]=false, [19347]=false, [19348]=false, [19349]=false, [447549]=false, [459703]=false},
+                ["Feedback"] = {"Feedback", [6347]=false, [13896]=false, [19267]=false, [19268]=false, [19269]=false, [19270]=false, [19271]=false, [19273]=false, [19274]=false, [19275]=false, [19345]=false}, 
                 ["Fire Shield"] = {"Fire Shield", [134]=false, [1167]=false, [2947]=false, [2949]=false, [8316]=false, [8317]=false, [8318]=false, [8319]=false, [11350]=false, [11351]=false, [11770]=false, [11771]=false, [11772]=false, [11773]=false, [11966]=false, [11968]=false, [13376]=false, [13377]=false, [18268]=false, [18968]=false, [19626]=false, [19627]=false, [20322]=false, [20323]=false, [20324]=false, [20326]=false, [20327]=false},
                 ["Flee"] = {"Flee", [5024]=false},
                 ["Food"] = {"Eating", [433]=false, [434]=false, [435]=false, [1127]=false, [1129]=false, [1131]=false, [2639]=false, [5004]=false, [5005]=false, [5006]=false, [5007]=false, [6410]=false, [7737]=false, [10256]=false, [10257]=false, [18229]=false, [18230]=false, [18231]=false, [18232]=false, [18233]=false, [18234]=false, [22731]=false, [24005]=false, [24707]=false, [24800]=false, [24869]=false, [25660]=false, [25695]=false, [25700]=false, [25702]=false, [25886]=false, [25888]=false, [26260]=false, [26401]=false, [26472]=false, [26474]=false, [28616]=false, [29008]=false, [29073]=false, [446713]=false, [470362]=false, [470369]=false, [1225769]=false, [1225771]=false, [1225772]=false, [1225774]=false, [1226808]=false},
@@ -15869,7 +16431,6 @@ local function init()
                 ["Dispel Magic"] = {"Dispel Magic", [527]=false, [615]=false, [988]=false, [989]=false, [1283]=false, [1284]=false, [15090]=false, [16908]=false, [17201]=false, [19476]=false, [19477]=false, [21076]=false, [23859]=false, [27609]=false, [364812]=false, [1236156]=false},
                 ["Drinking"] = {"Drinking", [14823]=false},
                 ["Earth Shock"] = {"Earth Shock", [8042]=false, [8043]=false, [8044]=false, [8045]=false, [8046]=false, [8047]=false, [8048]=false, [8049]=false, [10412]=false, [10413]=false, [10414]=false, [10415]=false, [10416]=false, [10417]=false, [13281]=false, [13728]=false, [15501]=false, [22885]=false, [23114]=false, [24685]=false, [25025]=false, [26194]=false, [408681]=false, [408683]=false, [408685]=false, [408687]=false, [408688]=false, [408689]=false, [408690]=false, [408693]=false, [1219379]=false, [1220744]=false, [1220746]=false, [1220747]=false, [1220748]=false, [1220749]=false, [1220750]=false, [1220751]=false},
-                ["Feign Death"] = {"Feign Death", [5384]=false, [5385]=false},
                 ["Find Herbs"] = {"Find Herbs", [2383]=false, [8387]=false, [8390]=false},
                 ["Find Minerals"] = {"Find Minerals", [2580]=false, [8388]=false, [8389]=false},
                 ["Find Treasure"] = {"Find Treasure", [2481]=false},
@@ -15915,9 +16476,9 @@ local function init()
             ["SPELL_SUMMON"] = {
                 ["Death by Peasant"] = {"Death by Peasant", [18307]=false, [18308]=false},
             },
-        }
-        
-        elseif currentProject == PROJECT_TBC then
+    }
+
+    elseif currentProject == PROJECT_TBC then
         rawSpellData = [=[
             Attack Power - Feral (+1125)~36386=136235=-1^
             Attack Power 104~36068=136235=-1^
@@ -31815,6 +32376,7 @@ local function init()
             ]=]
 
         defaultBuffs = {
+            "Arcane Torrent",
             "Avenging Wrath",
             "Battle Shout",
             "Battle Stance",
@@ -31828,6 +32390,7 @@ local function init()
             "Camouflage",
             "Cat Form",
             "Death Wish",
+            "Deterrence",
             "Dire Bear Form",
             "Divine Illumination",
             "Divine Intervention",
@@ -31859,6 +32422,7 @@ local function init()
             "Shadowmeld",
             "Shield Wall",
             "Slice and Dice",
+            "Spell Reflection",
             "Sprint",
             "Stealth",
             "Stoneform",
@@ -31869,12 +32433,13 @@ local function init()
             "Water Shield",
             "Will of the Forsaken",
         }
-
+        
         defaultSounds = {
             ["EXTRA_STRIKES"] = {
                 ["Hand of Justice"] = {"Hand of Justice", [15600]=false, [15601]=false},
             },
             ["SPELL_AURA_APPLIED"] = {
+                ["Arcane Torrent"] = {"Arcane Torrent", [25046]=false, [25048]=false, [28730]=false, [28733]=false, [33390]=false, [36022]=false},
                 ["Adrenaline Rush"] = {"Adrenaline Rush", [13750]=false, [28752]=false, [28753]=false},
                 ["Aspect of the Beast"] = {"Aspect of the Beast", [13161]=false},
                 ["Aspect of the Cheetah"] = {"Aspect of the Cheetah", [5118]=false},
@@ -31919,6 +32484,7 @@ local function init()
                 ["Faerie Fire"] = {"Faerie Fire", [770]=false, [778]=false, [6950]=false, [9749]=false, [9907]=false, [13424]=false, [13752]=false, [16498]=false, [20656]=false, [21670]=false, [25602]=false, [26993]=false, [32129]=false},
                 ["Fear Ward"] = {"Fear Ward", [6346]=false},
                 ["Feedback"] = {"Feedback", [6347]=false, [13896]=false, [19267]=false, [19268]=false, [19269]=false, [19270]=false, [19271]=false, [19273]=false, [19274]=false, [19275]=false, [25440]=false, [25441]=false, [32897]=false},
+                ["Feign Death"] = {"Feign Death", [5384]=false, [5385]=false,[19346]=false, [19347]=false, [19348]=false, [19349]=false, [447549]=false, [459703]=false},
                 ["Fire Shield"] = {"Fire Shield", [134]=false, [2947]=false, [2949]=false, [8316]=false, [8317]=false, [8318]=false, [8319]=false, [11350]=false, [11351]=false, [11770]=false, [11771]=false, [11772]=false, [11773]=false, [11968]=false, [13376]=false, [18968]=false, [19627]=false, [20322]=false, [20323]=false, [20324]=false, [20326]=false, [20327]=false, [27269]=false, [27486]=false, [27489]=false, [30513]=false, [30514]=false, [32749]=false, [32751]=false, [35265]=false, [35266]=false, [36907]=false, [37282]=false, [37283]=false, [37318]=false, [37434]=false, [38732]=false, [38733]=false, [38855]=false, [38893]=false, [38901]=false, [38902]=false, [38933]=false, [38934]=false},
                 ["Flee"] = {"Flee", [5024]=false},
                 ["Food"] = {"Eating", [433]=false, [434]=false, [435]=false, [1127]=false, [1129]=false, [1131]=false, [2639]=false, [5004]=false, [5005]=false, [5006]=false, [5007]=false, [6410]=false, [7737]=false, [10256]=false, [10257]=false, [18229]=false, [18230]=false, [18231]=false, [18232]=false, [18233]=false, [18234]=false, [22731]=false, [24005]=false, [24707]=false, [24800]=false, [24869]=false, [25660]=false, [25695]=false, [25700]=false, [25702]=false, [25886]=false, [25888]=false, [26260]=false, [26401]=false, [26472]=false, [26474]=false, [27094]=false, [28616]=false, [29008]=false, [29073]=false, [32112]=false, [33253]=false, [33255]=false, [33258]=false, [33260]=false, [33262]=false, [33264]=false, [33266]=false, [33269]=false, [33725]=false, [33773]=false, [35270]=false, [35271]=false, [40543]=false, [40745]=false, [40768]=false, [41030]=false, [42311]=false, [43763]=false, [43777]=false, [45618]=false, [46683]=false, [46812]=false, [46898]=false},
@@ -32058,6 +32624,7 @@ local function init()
                 ["Faerie Fire"] = {"Faerie Fire Down", [770]=false, [778]=false, [6950]=false, [9749]=false, [9907]=false, [13424]=false, [13752]=false, [16498]=false, [20656]=false, [21670]=false, [25602]=false, [26993]=false, [32129]=false},
                 ["Fear Ward"] = {"Fear Ward Down", [6346]=false},
                 ["Feedback"] = {"Feedback Down", [6347]=false, [13896]=false, [19267]=false, [19268]=false, [19269]=false, [19270]=false, [19271]=false, [19273]=false, [19274]=false, [19275]=false, [25440]=false, [25441]=false, [32897]=false},
+                ["Feign Death"] = {"Feign Death Down", [5384]=false, [5385]=false,[19346]=false, [19347]=false, [19348]=false, [19349]=false, [447549]=false, [459703]=false},
                 ["Fire Shield"] = {"Fire Shield Down", [134]=false, [2947]=false, [2949]=false, [8316]=false, [8317]=false, [8318]=false, [8319]=false, [11350]=false, [11351]=false, [11770]=false, [11771]=false, [11772]=false, [11773]=false, [11968]=false, [13376]=false, [18968]=false, [19627]=false, [20322]=false, [20323]=false, [20324]=false, [20326]=false, [20327]=false, [27269]=false, [27486]=false, [27489]=false, [30513]=false, [30514]=false, [32749]=false, [32751]=false, [35265]=false, [35266]=false, [36907]=false, [37282]=false, [37283]=false, [37318]=false, [37434]=false, [38732]=false, [38733]=false, [38855]=false, [38893]=false, [38901]=false, [38902]=false, [38933]=false, [38934]=false},
                 ["Flee"] = {"Flee Down", [5024]=false},
                 ["Frost Armor"] = {"Frost Armor Down", [168]=false, [7300]=false, [7301]=false, [12544]=false, [12556]=false, [15784]=false, [18100]=false, [31256]=false},
@@ -32335,6 +32902,7 @@ local function init()
                 ["Wrath"] = {"Wrath", [5176]=false, [5177]=false, [5178]=false, [5179]=false, [5180]=false, [6780]=false, [8905]=false, [9739]=false, [9912]=false, [17144]=false, [18104]=false, [20698]=false, [21667]=false, [21807]=false, [26984]=false, [26985]=false, [31784]=false},
             },
             ["SPELL_CAST_SUCCESS"] = {
+                ["Arcane Torrent"] = {"Arcane Torrent", [25046]=false, [25048]=false, [28730]=false, [28733]=false, [33390]=false, [36022]=false},
                 ["Astral Recall"] = {"Astral Recall", [556]=false},
                 ["Blink"] = {"Blink", [1953]=false, [14514]=false, [21655]=false, [28391]=false, [28401]=false, [29208]=false, [29209]=false, [29210]=false, [29211]=false, [29883]=false, [29884]=false, [29966]=false, [29967]=false, [29968]=false, [31439]=false, [31465]=false, [32937]=false, [33546]=false, [33548]=false, [33549]=false, [33550]=false, [34165]=false, [34605]=false, [34844]=false, [36097]=false, [36109]=false, [36718]=false, [36994]=false, [38194]=false, [38203]=false, [38642]=false, [38643]=false, [38932]=false, [38981]=false, [45862]=false, [46571]=false, [46573]=false},
                 ["Call Pet"] = {"Call Pet", [883]=false, [23498]=false, [27639]=false, [45322]=false},
@@ -32352,7 +32920,7 @@ local function init()
                 ["Dispel Magic"] = {"Dispel Magic", [527]=false, [988]=false, [15090]=false, [16908]=false, [17201]=false, [19476]=false, [21076]=false, [23859]=false, [27609]=false, [43577]=false},
                 ["Drinking"] = {"Drinking", [14823]=false},
                 ["Earth Shock"] = {"Earth Shock", [8042]=false, [8044]=false, [8045]=false, [8046]=false, [10412]=false, [10413]=false, [10414]=false, [13281]=false, [13728]=false, [15501]=false, [22885]=false, [23114]=false, [24685]=false, [25025]=false, [25454]=false, [26194]=false, [43305]=false, [47071]=false},
-                ["Feign Death"] = {"Feign Death", [5384]=false, [28728]=false, [37493]=false},
+                ["Feign Death"] = {"Feign Death", [5384]=false, [5385]=false,[19346]=false, [19347]=false, [19348]=false, [19349]=false, [447549]=false, [459703]=false},
                 ["Find Herbs"] = {"Find Herbs", [2383]=false, [8387]=false},
                 ["Find Minerals"] = {"Find Minerals", [2580]=false, [8388]=false},
                 ["Find Treasure"] = {"Find Treasure", [2481]=false},
@@ -32394,561 +32962,13 @@ local function init()
             ["SPELL_SUMMON"] = {
                 ["Death by Peasant"] = {"Death by Peasant", [18307]=false, [18308]=false},
             },
+            ["UNIT_SPELLCAST_SUCCEEDED"] = {
+                ["Feign Death"] = {"Feign Death", [5384]=false, [5385]=false,[19346]=false, [19347]=false, [19348]=false, [19349]=false, [447549]=false, [459703]=false},
+            },
         }
     end
-
     
-    -- Nameplate Buffs: Convert List to Table and Assign
-    if not HEAT.nameplateBuffs or not next(HEAT.nameplateBuffs) then
-        HEAT.nameplateBuffs = {}
-        if defaultBuffs then
-            for _, name in ipairs(defaultBuffs) do
-                HEAT.nameplateBuffs[name] = true
-            end
-        end
-    end
-    
-    if not HEAT.soundTable or not next(HEAT.soundTable) then
-        HEAT.soundTable = defaultSounds or {}
-    end
-
-    -- Process Spell Data (Runtime Only)
-    if currentProject and rawSpellData and rawSpellData ~= "" then
-        local tempDB = { rawSpellData }
-        for _, chunk in ipairs(tempDB) do
-            chunk = chunk .. "^"
-            for name, info in chunk:gmatch("(.-)~([^^]+)^") do
-                name = name:gsub("[\n\r]", "")
-                if name and name ~= "" then
-                    HEAT.spellData[name] = info
-                end
-            end
-        end
-        rawSpellData = nil -- clear memory
-    end
-
-    HEAT.unitTokens = { "playerpet", "target", "focus", "mouseover" }
-    for i = 1, 5 do table.insert(HEAT.unitTokens, "boss"..i) end
-    for i = 1, 5 do table.insert(HEAT.unitTokens, "arena"..i) end
-    for i = 1, 5 do table.insert(HEAT.unitTokens, "arenapet"..i) end
-    for i = 1, 40 do table.insert(HEAT.unitTokens, "nameplate"..i) end
-    for i = 1, 4 do table.insert(HEAT.unitTokens, "party"..i) end
-    for i = 1, 4 do table.insert(HEAT.unitTokens, "partypet"..i) end
-    for i = 1, 40 do table.insert(HEAT.unitTokens, "raid"..i) end
-    for i = 1, 40 do table.insert(HEAT.unitTokens, "raidpet"..i) end
-    
-    HEAT.FLAGS = {
-        PLAYER = COMBATLOG_OBJECT_TYPE_PLAYER or 0x00000400,
-        NPC = COMBATLOG_OBJECT_TYPE_NPC or 0x00000800,
-        PET = COMBATLOG_OBJECT_TYPE_PET or 0x00002000,
-        GUARDIAN = COMBATLOG_OBJECT_TYPE_GUARDIAN or 0x00004000,
-        CONTROL_PLAYER = COMBATLOG_OBJECT_CONTROL_PLAYER or 0x00000100,
-        REACTION_FRIENDLY = COMBATLOG_OBJECT_REACTION_FRIENDLY or 0x00000010,
-        REACTION_NEUTRAL  = COMBATLOG_OBJECT_REACTION_NEUTRAL  or 0x00000020,
-        REACTION_HOSTILE  = COMBATLOG_OBJECT_REACTION_HOSTILE  or 0x00000040,
-        AFFILIATION_OUTSIDER = COMBATLOG_OBJECT_AFFILIATION_OUTSIDER or 0x00000008
-    };
-                            
-    -- Process Sound Tables
-    if HEAT.soundTable["SPELL_AURA_APPLIED"] and not HEAT.soundTable["SPELL_AURA_REFRESH"] then
-        HEAT.soundTable["SPELL_AURA_REFRESH"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
-        HEAT.soundTable["UNIT_AURA"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
-    end
-
-    if HEAT.soundTable["SPELL_CAST_START"] then
-        HEAT.soundTable["UNIT_SPELLCAST_START"] = HEAT.soundTable["SPELL_CAST_START"]
-        HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_START"] = HEAT.soundTable["SPELL_CAST_START"] 
-        HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_STOP"] = HEAT.soundTable["SPELL_CAST_START"] 
-    end
-
-    if HEAT.soundTable["SPELL_CAST_SUCCESS"] then
-        HEAT.soundTable["UNIT_SPELLCAST_SUCCEEDED"] = HEAT.soundTable["SPELL_CAST_SUCCESS"]
-    end
-
-    -- Process Parsed Data into AuraInfo
-    if HEAT.spellData then
-        local spellCount = 0
-        local parsedSpellData = {}
-        
-        for spellName, dataString in pairs(HEAT.spellData) do
-            for entry in string.gmatch(dataString, "([^,]+)") do
-                local sID, sIcon, sDur = string.match(entry, "(%d+)=(%d+)=([%d%-]+)")
-                if sID then
-                    local id = tonumber(sID)
-                    local icon = tonumber(sIcon)
-                    local dur = tonumber(sDur)
-                    
-                    parsedSpellData[id] = dur
-                    
-                    HEAT.AuraInfo[id] = {
-                        spellID = id,
-                        icon = icon,
-                        name = spellName,
-                        duration = dur
-                    }
-                    spellCount = spellCount + 1
-                end
-            end
-        end
-        print(string.format("|cFFFFD700H|r |cFFFF8C00E|r |cFFFF4500A|r |cFFFF0000T|r Successfully built and cached |cFF00FF00%d|r spells.", spellCount))
-    end
-
-    if HEAT.soundTable then
-        for eventType, eventSpells in pairs(HEAT.soundTable) do
-            HEAT.spellIDMap[eventType] = {}
-            for _, spellConfig in pairs(eventSpells) do
-                local soundFile = spellConfig[1]
-                for key, value in pairs(spellConfig) do
-                    if type(key) == "number" and key ~= 1 then
-                        HEAT.spellIDMap[eventType][key] = { soundFile = soundFile, requireDst = value }
-                    end
-                end
-            end
-        end
-    end
-
-    HEAT.initialized = true
-    print("HEAT Initialized.")
-end
-
-----------------------------------------------------------------------------
--- FUNCTION DEFINITIONS
-----------------------------------------------------------------------------
-function HEAT:SendMessage(message)
-    if IsInGroup() then
-        local msg = ("%s#"):format(message)
-        local channel = IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and IsInInstance() and "INSTANCE_CHAT" or "RAID"              
-        if channel and msg then C_ChatInfo.SendAddonMessage(HEAT.prefix, msg, channel) end
-    end
-end
-    
-function HEAT:PlaySound(file, channel)
-    if not file then return end
-    local soundPath = self.SOUND_PREFIX .. file .. self.fileExtension
-    local soundChannel = channel or self.CHANNEL
-    if soundPath and soundChannel then PlaySoundFile(soundPath, soundChannel) end
-end
-    
-function HEAT:RemoveNode(node)
-    if not node or not self.hostilityCache then return end
-    if node.prev then node.prev.next = node.next else self.hostilityCache.head = node.next end
-    if node.next then node.next.prev = node.prev else self.hostilityCache.tail = node.prev end
-    self.hostilityCache.cache[node.guid] = nil
-    if self.hostilityCache.size > 0 then self.hostilityCache.size = self.hostilityCache.size - 1 end
-end
-    
-function HEAT:MoveToHead(node)
-    if not node or not self.hostilityCache or node == self.hostilityCache.head then return end
-    if node.prev then node.prev.next = node.next end
-    if node.next then node.next.prev = node.prev end
-    if self.hostilityCache.tail == node then self.hostilityCache.tail = node.prev end
-    node.prev = nil
-    node.next = self.hostilityCache.head
-    if self.hostilityCache.head then self.hostilityCache.head.prev = node end
-    self.hostilityCache.head = node
-end
-    
-function HEAT:AddNode(guid)
-    if not guid or not self.hostilityCache then return end
-    
-    -- Remove tail if cache is full
-    if self.hostilityCache.size >= self.hostilityCache.maxSize then
-        local tail = self.hostilityCache.tail
-        if tail then self:RemoveNode(tail) end
-    end
-    
-    -- isEnemy is now hardcoded to true
-    local node = { guid = guid, isEnemy = true, buffs = {}, prev = nil, next = self.hostilityCache.head }
-    
-    if self.hostilityCache.head then self.hostilityCache.head.prev = node end
-    self.hostilityCache.head = node
-    if not self.hostilityCache.tail then self.hostilityCache.tail = node end
-    
-    self.hostilityCache.cache[guid] = node
-    self.hostilityCache.size = self.hostilityCache.size + 1
-end
-    
-function HEAT:IsEnemy(guid, unitFlags)
-    if guid == self.playerGUID then return false end
-    
-    if not guid or not unitFlags then return false end
-    
-    local isHostile = (bit.band(unitFlags, self.FLAGS.REACTION_HOSTILE) > 0)
-    
-    -- Only interact with the cache if the unit is hostile
-    if isHostile then
-        local node = self.hostilityCache.cache[guid]
-        if node then
-            -- It's already in cache, move it to the front
-            self:MoveToHead(node)
-        else
-            self:AddNode(guid)
-        end
-    end
-    
-    return isHostile
-end
-    
-function HEAT:BuildFlags(unit, guid)
-    if not unit or not UnitExists(unit) then return 0 end
-    local unitGUID = guid or UnitGUID(unit)
-    if not unitGUID then return 0 end
-    
-    local flags = 0
-    if UnitIsEnemy("player", unit) then flags = self.FLAGS.REACTION_HOSTILE
-    elseif UnitIsFriend("player", unit) then flags = self.FLAGS.REACTION_FRIENDLY
-    else flags = self.FLAGS.REACTION_NEUTRAL end
-    
-    if string.sub(unitGUID, 1, 3) == "Pet" then flags = bit.bor(flags, self.FLAGS.PET)
-    elseif UnitIsPlayer(unit) then flags = bit.bor(flags, self.FLAGS.PLAYER)
-    else flags = bit.bor(flags, self.FLAGS.NPC) end
-    
-    if UnitPlayerControlled(unit) then flags = bit.bor(flags, self.FLAGS.CONTROL_PLAYER) end
-    
-    if not UnitInParty(unit) and not UnitInRaid(unit) and unit ~= "player" and unit ~= "pet" and unit ~= "vehicle" then
-        flags = bit.bor(flags, self.FLAGS.AFFILIATION_OUTSIDER)
-    end
-    return flags
-end
-    
-function HEAT:UpdateUnitHostility(unit, guid)
-    if not UnitExists(unit) then return 0, false end
-    local unitGUID = guid or UnitGUID(unit)
-    if not unitGUID then return 0, false end
-    
-    local flags = self:BuildFlags(unit, unitGUID)
-    local isHostile = self:IsEnemy(unitGUID, flags)
-    return flags, isHostile
-end
-    
-function HEAT:UpdateUnitCache(unit)
-    if not unit then return end
-    local guid = UnitGUID(unit)
-    if guid then
-        -- Ensure table exists
-        if not self.guidToUnit then self.guidToUnit = {} end
-        self.guidToUnit[guid] = unit
-    end
-end
-
--- Cleans up the cache when a unit is removed
-function HEAT:ClearUnitCache(unit)
-    if not unit or not self.guidToUnit then return end
-    
-    -- When a unit is removed (e.g. Nameplate), UnitGUID(unit) might return nil.
-    -- We must iterate the cache to find which GUID maps to this unit ID.
-    for guid, cachedUnit in pairs(self.guidToUnit) do
-        if cachedUnit == unit then
-            self.guidToUnit[guid] = nil
-            -- We don't break here just in case multiple GUIDs pointed to the same unit ID (unlikely but safe)
-        end
-    end
-end
-    
-function HEAT:StoreBuff(guid, spellID, data)
-    if not self.storedBuffs[guid] then self.storedBuffs[guid] = {} end
-    self.storedBuffs[guid][spellID] = data
-end
-    
-function HEAT:RemoveBuff(guid, spellID)
-    if self.storedBuffs[guid] then
-        self.storedBuffs[guid][spellID] = nil
-        if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
-    end
-end
-    
-function HEAT:ScanAllUnits()
-    if not self.unitTokens then return end
-    for _, unit in ipairs(self.unitTokens) do
-        if UnitExists(unit) then
-            local guid = UnitGUID(unit)
-            if guid then
-                -- Update cache for every unit scan
-                self:UpdateUnitCache(unit)
-                
-                local flags, isHostile = self:UpdateUnitHostility(unit, guid)
-                self:ScanUnitBuffs(unit, flags, isHostile, guid)
-            end
-        end
-    end
-end
-    
-function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
-    local guid = providedGUID or UnitGUID(unit)
-    if not guid then return end
-    
-    local isEnemy = providedIsEnemy
-    if isEnemy == nil then
-        local flags = providedFlags or self:BuildFlags(unit, guid)
-        isEnemy = self.IsEnemy and self:IsEnemy(guid, flags)
-    end
-    
-    if not isEnemy then return end
-            
-    local now = GetTime()
-    local foundSpells = {}
-    local filterList = {"HELPFUL", "HARMFUL"}
-    
-    for _, filter in ipairs(filterList) do
-        for i = 1, 40 do
-            local name, icon, count, _, duration, expirationTime, source, _, _, spellID = UnitAura(unit, i, filter)
-            if not name then break end 
-            
-            local skip = (filter == "HARMFUL") 
-            
-            if not skip and spellID and self.AuraInfo[spellID] then
-                local calculatedDuration = duration
-                if calculatedDuration == 0 then calculatedDuration = -1 end
-                
-                foundSpells[spellID] = true
-                
-                -- Pass 'isScanned = true' to your helper function
-                self:StoreBuff(guid, spellID, {
-                        destGUID = guid, 
-                        duration = calculatedDuration, 
-                        expirationTime = expirationTime,
-                        spellID = spellID, 
-                        icon = icon,
-                        startTime = (expirationTime and expirationTime > 0) and (expirationTime - duration) or now,
-                        stacks = count or 0,
-                        isScanned = true -- <--- Mark that UnitAura definitely saw this
-                })
-            end
-        end
-    end
-    
-    -- CLEANUP AND VALIDATION
-    if self.storedBuffs[guid] then
-        local inCombat = UnitAffectingCombat(unit) -- Check if unit is fighting
-        
-        for spellID, data in pairs(self.storedBuffs[guid]) do
-            local shouldRemove = false
-            
-            -- Standard Cleanup
-            -- If UnitAura scanned it before (isScanned=true) but it's gone now, delete it.
-            if not foundSpells[spellID] and data.isScanned then
-                shouldRemove = true
-            end
-
-            -- Stealth Sanity Check
-            -- If we can see the unit (we are scanning it) AND they are in Combat, 
-            -- they cannot be Stealthed. Force remove the icon.
-            if not shouldRemove and inCombat then
-                local spellInfo = self.AuraInfo[spellID]
-                if spellInfo and spellInfo.name then
-                    if 
-                    spellInfo.name == "Camouflage" or
-                    spellInfo.name == "Hide" or
-                    spellInfo.name == "Prowl" or
-                    spellInfo.name == "Shadowmeld" or
-                    spellInfo.name == "Stealth" or
-                    spellInfo.name == "Subterfuge" then
-                        shouldRemove = true
-                    end
-                end
-            end
-            
-            if shouldRemove then
-                self.storedBuffs[guid][spellID] = nil
-            end
-        end
-        -- Final table cleanup
-        if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
-    end
-end
-    
-function HEAT:ProcessDataEvents(event, ...)
-    local now = GetTime()
-    local INFINITY = -1
-    
-    if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        -- Note: 'extraSpellID' maps to the 16th argument. 
-        -- For DOSE/REFRESH events, this is the Amount/Stacks.
-        -- For DISPEL events, this is the ID of the spell being removed.
-        local _, subEvent, _, sourceGUID, _, sourceFlags, _, destGUID, destName, destFlags, _, spellID, _, _, auraType, extraSpellID, durationMS = CombatLogGetCurrentEventInfo()
-        
-        -- Cleanup on Death
-        if subEvent == "UNIT_DIED" or subEvent == "UNIT_DESTROYED" then
-            if destGUID then
-                self.storedBuffs[destGUID] = nil
-                self.unitCastDelayed[destGUID] = nil 
-                if self.hostilityCache and self.hostilityCache.cache[destGUID] then
-                    self:RemoveNode(self.hostilityCache.cache[destGUID])
-                end
-            end
-            return
-        end
-        
-        -- Warrior Stance Inference
-        if subEvent == "SPELL_CAST_SUCCESS" then
-            if sourceGUID ~= self.playerGUID and self:IsEnemy(sourceGUID, sourceFlags) then
-                local newStance = nil
-                -- Charge (Rank 1-3) -> Battle Stance
-                if spellID == 100 or spellID == 6178 or spellID == 11578 then newStance = 2457 
-                -- Intercept (Rank 1-3) -> Berserker Stance
-                elseif spellID == 20252 or spellID == 20616 or spellID == 20617 then newStance = 2458 
-                end
-                
-                if newStance and sourceGUID then
-                    local icon = nil
-                    if self.AuraInfo and self.AuraInfo[newStance] then icon = self.AuraInfo[newStance].icon end
-                    
-                    self:RemoveBuff(sourceGUID, 2457)
-                    self:RemoveBuff(sourceGUID, 2458)
-                    self:RemoveBuff(sourceGUID, 71) -- Defensive Stance
-                    
-                    self:StoreBuff(sourceGUID, newStance, {
-                        destGUID = sourceGUID,
-                        spellID = newStance,
-                        icon = icon,
-                        duration = INFINITY,
-                        expirationTime = nil,
-                        startTime = now,
-                        count = 0
-                    })
-                end
-            end
-        end
-
-        local idToProcess = spellID
-        local isApplication = subEvent == "SPELL_AURA_APPLIED" or subEvent == "SPELL_AURA_REFRESH" or subEvent == "SPELL_AURA_APPLIED_DOSE"
-        local isRemoval = subEvent == "SPELL_AURA_REMOVED" or subEvent == "SPELL_AURA_BROKEN" or subEvent == "SPELL_AURA_BROKEN_SPELL" or subEvent == "SPELL_AURA_REMOVED_DOSE"
-        local isDispel = subEvent == "SPELL_DISPEL" or subEvent == "SPELL_STOLEN"
-        
-        if isDispel and extraSpellID and extraSpellID ~= 0 then idToProcess = extraSpellID end
-        
-        local spellDataForLookup = self.AuraInfo[idToProcess]
-        local spellDataForApplication = self.AuraInfo[spellID]
-        
-        if (isApplication and spellDataForApplication) or ((isRemoval or isDispel) and spellDataForLookup) then
-            
-            if self.IsEnemy and self:IsEnemy(destGUID, destFlags) and auraType == "BUFF" then
-                
-                if isApplication and spellDataForApplication then
-                    -- We only ignore applications if the player cast them on the enemy (rare, but safe to filter)
-                    if sourceGUID == self.playerGUID then return end
-                
-                    local buffDuration = INFINITY
-                    if durationMS and durationMS > 0 then 
-                        buffDuration = durationMS
-                    elseif spellDataForApplication.duration and spellDataForApplication.duration ~= INFINITY then 
-                        buffDuration = tonumber(spellDataForApplication.duration) 
-                    end
-                    
-                    local expirationTime = (buffDuration == INFINITY) and nil or ((buffDuration > 0) and (now + buffDuration) or nil)
-                    
-                    local currentStacks = 1
-                    if (subEvent == "SPELL_AURA_APPLIED_DOSE" or subEvent == "SPELL_AURA_REFRESH") and extraSpellID then
-                        currentStacks = extraSpellID
-                    end
-                    
-                    self:StoreBuff(destGUID, spellID, {
-                            destGUID = destGUID, 
-                            duration = buffDuration, 
-                            expirationTime = expirationTime,
-                            spellID = spellID, 
-                            icon = spellDataForApplication.icon, 
-                            startTime = now,
-                            stacks = currentStacks 
-                    })
-                    
-                    self:SendMessage("APPLIED", destGUID, spellID, (expirationTime or 0))
-                    
-                elseif (isRemoval or isDispel) and spellDataForLookup then
-                    -- Note: We DO NOT check sourceGUID here. 
-                    -- If Player dispels Enemy, we want to remove the buff immediately.
-                    
-                    self:RemoveBuff(destGUID, idToProcess)
-                    self:SendMessage("REMOVED", destGUID, idToProcess)
-                end
-            end
-        end
-        
-    elseif event == "CHAT_MSG_ADDON" then
-        -- (This section looked fine, keep it as is)
-        local messagePrefix, msg, _, sender = ...
-        if messagePrefix == self.prefix and sender ~= UnitName("player") and msg then
-            local eventType, data = msg:match("([^#]+)#(.*)")
-            if not (eventType and data) then return end
-            
-            local guid = data:match("([^#]+)")
-            if guid and guid == UnitGUID("target") then return end 
-            
-            if eventType == "APPLIED" then
-                local _, spellID, expiration = data:match("([^#]+)#([^#]+)#([^#]+)")
-                spellID = tonumber(spellID)
-                expiration = tonumber(expiration)
-                if not (guid and spellID and expiration) then return end
-                
-                local spell = self.AuraInfo[spellID]
-                if not spell then return end
-                local expirationTime = (expiration == 0) and nil or expiration
-                local duration = INFINITY
-                if expirationTime then duration = expirationTime - now; if duration < 0 then duration = 0 end
-                elseif spell and spell.duration ~= INFINITY then duration = spell.duration end
-                
-                self:StoreBuff(guid, spellID, {
-                        destGUID = guid, duration = duration, expirationTime = expirationTime,
-                        spellID = spellID, icon = spell.icon, startTime = now
-                })
-                
-            elseif eventType == "REMOVED" then
-                local _, spellID = data:match("([^#]+)#([^#]+)")
-                spellID = tonumber(spellID)
-                if guid and spellID then self:RemoveBuff(guid, spellID) end
-            end
-        end
-    end
-end
-
-function HEAT:ProcessHostilityEvent(event, ...)
-        if not self.hostilityCache then return end
-        
-        -- Process raw data (Combat Log / Chat Sync)
-        self:ProcessDataEvents(event, ...)
-        
-        -- Handle Zone Changes / Roster updates
-        if event == "PLAYER_ENTERING_WORLD" or event == "ARENA_OPPONENT_UPDATE" or event == "GROUP_ROSTER_UPDATE" then
-            self:ScanAllUnits()
-            -- Arena Update Specifics: Check for removal
-            if event == "ARENA_OPPONENT_UPDATE" then
-                local unit, type = ...
-                if type == "cleared" or type == "destroyed" then
-                    self:ClearUnitCache(unit)
-                else
-                    self:UpdateUnitCache(unit)
-                end
-            end
-            return
-        end
-        
-        -- Determine if a specific unit needs scanning based on the event
-        local unitToUpdate = nil
-        if event == "PLAYER_TARGET_CHANGED" then unitToUpdate = "target"
-        elseif event == "UPDATE_MOUSEOVER_UNIT" then unitToUpdate = "mouseover"
-        elseif event == "PLAYER_FLAGS_CHANGED" then unitToUpdate = "player"
-        elseif event == "NAME_PLATE_UNIT_ADDED" or event == "UNIT_FLAGS" or event == "UNIT_FACTION" or event == "UNIT_TARGET" or event == "UNIT_AURA" then
-            local unitId = ...
-            if unitId and UnitExists(unitId) then 
-                unitToUpdate = unitId 
-                -- IMPORTANT: Keep cache updated here
-                self:UpdateUnitCache(unitId)
-            end
-        
-        -- Handle Nameplate Removal to clean cache
-        elseif event == "NAME_PLATE_UNIT_REMOVED" then
-            local unitId = ...
-            if unitId then self:ClearUnitCache(unitId) end
-        end
-        
-        -- Perform the scan if a unit was identified
-        if unitToUpdate then
-            local guid = UnitGUID(unitToUpdate)
-            if guid then
-                local flags, isHostile = self:UpdateUnitHostility(unitToUpdate, guid)
-                self:ScanUnitBuffs(unitToUpdate, flags, isHostile, guid)
-            end
-        end
+    return rawSpellData, defaultBuffs, defaultSounds
 end
 
 -- Global frame for event handling
