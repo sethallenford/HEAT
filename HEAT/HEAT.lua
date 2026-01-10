@@ -94,7 +94,7 @@ local function init()
     if HEAT.soundTable["SPELL_CAST_START"] then
         HEAT.soundTable["UNIT_SPELLCAST_START"] = HEAT.soundTable["SPELL_CAST_START"]
         HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_START"] = HEAT.soundTable["SPELL_CAST_START"] 
-        HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_STOP"] = HEAT.soundTable["SPELL_CAST_START"] 
+        --HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_STOP"] = HEAT.soundTable["SPELL_CAST_START"] 
     end
 
     if HEAT.soundTable["SPELL_CAST_SUCCESS"] then
@@ -334,20 +334,21 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
             
     local now = GetTime()
     local foundSpells = {}
-    local filterList = {"HELPFUL", "HARMFUL"}
+    local filterList = {"HELPFUL"}
     
     for _, filter in ipairs(filterList) do
         for i = 1, 40 do
             local name, icon, count, _, duration, expirationTime, source, _, _, spellID = UnitAura(unit, i, filter)
             if not name then break end 
             
-            local skip = (filter == "HARMFUL") 
-            
-            if not skip and spellID and self.AuraInfo[spellID] then
+            if spellID and self.AuraInfo[spellID] then
                 local calculatedDuration = duration
                 if calculatedDuration == 0 then calculatedDuration = -1 end
                 
                 foundSpells[spellID] = true
+                
+                local stackCount = count or 0
+                if stackCount == 0 then stackCount = 1 end
                                 
                 self:StoreBuff(guid, spellID, {
                         destGUID = guid, 
@@ -356,7 +357,7 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
                         spellID = spellID, 
                         icon = icon,
                         startTime = (expirationTime and expirationTime > 0) and (expirationTime - duration) or now,
-                        stacks = count or 0,
+                        stacks = stackCount,
                         isScanned = true 
                 })
             end
@@ -399,9 +400,6 @@ function HEAT:ProcessDataEvents(event, ...)
     local INFINITY = -1
     
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        -- Note: 'extraSpellID' maps to the 16th argument. 
-        -- For DOSE/REFRESH events, this is the Amount/Stacks.
-        -- For DISPEL events, this is the ID of the spell being removed.
         local _, subEvent, _, sourceGUID, _, sourceFlags, _, destGUID, destName, destFlags, _, spellID, _, _, auraType, extraSpellID, durationMS = CombatLogGetCurrentEventInfo()
         
         -- Cleanup on Death
@@ -430,9 +428,9 @@ function HEAT:ProcessDataEvents(event, ...)
                     local icon = nil
                     if self.AuraInfo and self.AuraInfo[newStance] then icon = self.AuraInfo[newStance].icon end
                     
-                    self:RemoveBuff(sourceGUID, 2457)
-                    self:RemoveBuff(sourceGUID, 2458)
-                    self:RemoveBuff(sourceGUID, 71) -- Defensive Stance
+                    self:RemoveBuff(sourceGUID, 2457) -- Battle
+                    self:RemoveBuff(sourceGUID, 2458) -- Berserker
+                    self:RemoveBuff(sourceGUID, 71)   -- Defensive
                     
                     self:StoreBuff(sourceGUID, newStance, {
                         destGUID = sourceGUID,
@@ -441,7 +439,7 @@ function HEAT:ProcessDataEvents(event, ...)
                         duration = INFINITY,
                         expirationTime = nil,
                         startTime = now,
-                        stacks = 0
+                        stacks = 0 
                     })
                 end
             end
@@ -462,7 +460,6 @@ function HEAT:ProcessDataEvents(event, ...)
             if self.IsEnemy and self:IsEnemy(destGUID, destFlags) and auraType == "BUFF" then
                 
                 if isApplication and spellDataForApplication then
-                    -- We only ignore applications if the player cast them on the enemy (rare, but safe to filter)
                     if sourceGUID == self.playerGUID then return end
                 
                     local buffDuration = INFINITY
@@ -488,15 +485,9 @@ function HEAT:ProcessDataEvents(event, ...)
                             startTime = now,
                             stacks = currentStacks 
                     })
-                    
-                    self:SendMessage("APPLIED", destGUID, spellID, (expirationTime or 0))
-                    
                 elseif (isRemoval or isDispel) and spellDataForLookup then
-                    -- Note: We DO NOT check sourceGUID here. 
-                    -- If Player dispels Enemy, we want to remove the buff immediately.
-                    
                     self:RemoveBuff(destGUID, idToProcess)
-                    self:SendMessage("REMOVED", destGUID, idToProcess)
+                    -- self:SendMessage("REMOVED", destGUID, idToProcess)
                 end
             end
         end
@@ -620,6 +611,7 @@ function HEAT:LoadStaticData()
             "Evasion",
             "Evocation",
             "Fear Ward",
+            "First Aid",
             "Flee",
             "Flight Form",
             "Free Action",
@@ -1209,6 +1201,7 @@ function HEAT:LoadStaticData()
             "Camouflage",
             "Cat Form",
             "Death Wish",
+            "Deterrence",
             "Dire Bear Form",
             "Divine Illumination",
             "Divine Intervention",
@@ -1218,6 +1211,7 @@ function HEAT:LoadStaticData()
             "Evasion",
             "Evocation",
             "Fear Ward",
+            "First Aid",
             "Flee",
             "Flight Form",
             "Free Action",
@@ -1328,6 +1322,7 @@ function HEAT:LoadStaticData()
                 ["Levitate"] = {"Levitate", [1706]=false, [27986]=false, [31704]=false, [52970]=false},
                 ["Lightning Shield"] = {"Lightning Shield", [324]=false, [325]=false, [905]=false, [945]=false, [8134]=false, [8788]=false, [10431]=false, [10432]=false, [12550]=false, [13585]=false, [15507]=false, [19514]=false, [20545]=false, [23551]=false, [23552]=false, [25020]=false, [25469]=false, [25472]=false, [26363]=false, [26364]=false, [26365]=false, [26366]=false, [26367]=false, [26369]=false, [26370]=false, [26371]=false, [26372]=false, [27635]=false, [28820]=false, [28821]=false, [31765]=false, [39067]=false, [41151]=false},
                 ["Mage Armor"] = {"Mage Armor", [6117]=false, [22782]=false, [22783]=false, [27125]=false},
+                ["Major Dreamless Sleep"] = {"Major Dreamless Sleep", [28504]=false},
                 ["Magma Totem"] = {"Magma Totem", [8187]=false, [8190]=false, [10579]=false, [10580]=false, [10581]=false, [10585]=false, [10586]=false, [10587]=false, [25550]=false, [25552]=false},
                 ["Mana Shield"] = {"Mana Shield", [1463]=false, [8494]=false, [8495]=false, [10191]=false, [10192]=false, [10193]=false, [17740]=false, [17741]=false, [27131]=false, [29880]=false, [30973]=false, [31635]=false, [35064]=false, [38151]=false, [46151]=false},
                 ["Mana Spring Totem"] = {"Mana Spring Totem", [5675]=false, [10495]=false, [10496]=false, [10497]=false, [24854]=false, [25570]=false},
@@ -1348,6 +1343,8 @@ function HEAT:LoadStaticData()
                 ["Premeditation"] = {"Premeditation", [14183]=false},
                 ["Presence of Mind"] = {"Presence of Mind", [12043]=false, [29976]=false},
                 ["Prowl"] = {"Prowl", [5215]=false, [6783]=false, [8152]=false, [9913]=false, [24450]=false, [24451]=false, [24452]=false, [24453]=false, [24454]=false, [24455]=false, [42932]=false},
+                ["PvP Trinket"] = {"Trinketed Hunter", [28243]=false},
+                ["PvP Trinket"] = {"Trinketed Warrior", [42292]=false},
                 ["Rapid Fire"] = {"Rapid Fire", [3045]=false, [28755]=false, [36828]=false},
                 ["Reckless Charge"] = {"Reckless Charge", [13327]=false, [22641]=false, [22646]=false},
                 ["Recklessness"] = {"Recklessness", [1719]=false, [13847]=false},
@@ -1540,6 +1537,7 @@ function HEAT:LoadStaticData()
                 ["Wyvern Sting"] = {"Wyvern Sting Down", [19386]=false, [24131]=false, [24132]=false, [24133]=false, [24134]=false, [24135]=false, [24335]=false, [24336]=false, [26180]=false, [26233]=false, [26748]=false, [27068]=false, [27069]=false, [41186]=false},
             },
             ["SPELL_CAST_START"] = {
+                ["Adamantite Grenade"] = {"Adamantite Grenade", [30217]=false, [30311]=false},
                 ["Aimed Shot"] = {"Aimed Shot", [19434]=true, [20900]=true, [20901]=true, [20902]=true, [20903]=true, [20904]=true, [27065]=true, [27632]=true, [30614]=true, [31623]=true, [38370]=true, [38861]=true, [44271]=true, [46460]=true},
                 ["Ancestral Healing"] = {"Ancestral Healing", [16176]=false, [16235]=false, [16240]=false},
                 ["Ancestral Spirit"] = {"Ancestral Spirit", [2008]=false, [20609]=false, [20610]=false, [20776]=false, [20777]=false, [25590]=false},
@@ -1658,7 +1656,6 @@ function HEAT:LoadStaticData()
                 ["Poisons"] = {"Poisons", [2842]=false, [2995]=false},
                 ["Polymorph"] = {"Polymorph", [118]=true, [12824]=true, [12825]=true, [12826]=true, [13323]=true, [13323]=true, [13323]=true, [14621]=true, [15534]=true, [27760]=true, [28271]=true, [28272]=true, [29124]=true, [29848]=true, [30838]=true, [34639]=true, [36840]=true, [38245]=true, [38896]=true, [41334]=true, [43309]=true, [46280]=true},
                 ["Prayer of Healing"] = {"Prayer of Healing", [596]=false, [996]=false, [10960]=false, [10961]=false, [13857]=false, [15585]=false, [25308]=false, [25316]=false, [30604]=false, [33152]=false, [35943]=false},
-                ["PvP Trinket"] = {"Trinketed", [42292]=false},
                 ["Pyroblast"] = {"Pyroblast", [11366]=true, [12505]=true, [12522]=true, [12523]=true, [12524]=true, [12525]=true, [12526]=true, [17273]=true, [17274]=true, [18809]=true, [20228]=true, [24995]=true, [27132]=true, [29459]=true, [29978]=true, [29978]=true, [31263]=true, [33938]=true, [33975]=true, [36277]=true, [36819]=true, [38535]=true, [41578]=true},
                 ["Rage Potion"] = {"Rage Potion", [6617]=false},
                 ["Rain of Fire"] = {"Rain of Fire", [4629]=false, [5740]=false, [6219]=false, [11677]=false, [11678]=false, [11990]=false, [16005]=false, [19474]=false, [19717]=false, [20754]=false, [24669]=false, [27212]=false, [28794]=false, [31340]=false, [31598]=false, [33508]=false, [33617]=false, [33627]=false, [33972]=false, [34169]=false, [34185]=false, [34360]=false, [34435]=false, [36808]=false, [37279]=false, [37465]=false, [38635]=false, [38741]=false, [39024]=false, [39273]=false, [39363]=false, [39376]=false, [42023]=false, [42218]=false, [42223]=false, [42224]=false, [42225]=false, [42226]=false, [42227]=false, [43440]=false},
@@ -1717,6 +1714,7 @@ function HEAT:LoadStaticData()
                 ["Wrath"] = {"Wrath", [5176]=false, [5177]=false, [5178]=false, [5179]=false, [5180]=false, [6780]=false, [8905]=false, [9739]=false, [9912]=false, [17144]=false, [18104]=false, [20698]=false, [21667]=false, [21807]=false, [26984]=false, [26985]=false, [31784]=false},
             },
             ["SPELL_CAST_SUCCESS"] = {
+                ["Arcane Torrent"] = {"Arcane Torrent", [28730]=false},
                 ["Astral Recall"] = {"Astral Recall", [556]=false},
                 ["Blink"] = {"Blink", [1953]=false, [14514]=false, [21655]=false, [28391]=false, [28401]=false, [29208]=false, [29209]=false, [29210]=false, [29211]=false, [29883]=false, [29884]=false, [29966]=false, [29967]=false, [29968]=false, [31439]=false, [31465]=false, [32937]=false, [33546]=false, [33548]=false, [33549]=false, [33550]=false, [34165]=false, [34605]=false, [34844]=false, [36097]=false, [36109]=false, [36718]=false, [36994]=false, [38194]=false, [38203]=false, [38642]=false, [38643]=false, [38932]=false, [38981]=false, [45862]=false, [46571]=false, [46573]=false},
                 ["Call Pet"] = {"Call Pet", [883]=false, [23498]=false, [27639]=false, [45322]=false},
@@ -1741,6 +1739,7 @@ function HEAT:LoadStaticData()
                 ["Fishing"] = {"Fishing", [7620]=false, [7731]=false, [7732]=false, [13615]=false, [18248]=false, [24303]=false, [33095]=false, [45698]=false},
                 ["Frost Nova"] = {"Frost Nova", [122]=false, [865]=false, [6131]=false, [9915]=false, [10230]=false, [11831]=false, [12674]=false, [12748]=false, [14907]=false, [15063]=false, [15531]=false, [15532]=false, [22645]=false, [27088]=false, [29849]=false, [30094]=false, [31250]=false, [32192]=false, [32365]=false, [34326]=false, [36989]=false, [38033]=false, [39035]=false, [39063]=false, [43426]=false, [44177]=false, [45905]=false, [46555]=false},
                 ["Frost Trap"] = {"Frost Trap", [13809]=false},
+                ["Healing Potion"] = {"Healing Potion", [28495]=false},
                 ["Honorless Target"] = {"Honorless Target", [2479]=false, [46705]=false},
                 ["Hunter's Mark"] = {"Hunter's Mark", [1130]=false, [14323]=false, [14324]=false, [14325]=false, [31615]=false},
                 ["Life Tap"] = {"Life Tap", [1454]=false, [1455]=false, [1456]=false, [4090]=false, [11687]=false, [11688]=false, [11689]=false, [27222]=false, [28830]=false, [31818]=false, [32553]=false},
@@ -1750,7 +1749,8 @@ function HEAT:LoadStaticData()
                 ["Noggenfogger Elixir"] = {"Noggenfogger Elixir", [16589]=false, [16591]=false, [16593]=false, [16595]=false},
                 ["Prowl"] = {"Prowl", [5215]=false, [6783]=false, [8152]=false, [9913]=false, [24450]=false, [24451]=false, [24452]=false, [24453]=false, [24454]=false, [24455]=false, [42932]=false},
                 ["Psychic Scream"] = {"Psychic Scream", [8122]=false, [8124]=false, [10888]=false, [10890]=false, [13704]=false, [15398]=false, [22884]=false, [26042]=false, [27610]=false, [34322]=false, [43432]=false},
-                ["PvP Trinket"] = {"Trinketed", [42292]=false},
+                ["PvP Trinket"] = {"Trinketed", [28243]=false, [42292]=false},              
+                ["Readiness"] = {"Readiness", [23989]=false},
                 ["Refocus"] = {"Refocus", [24531]=false},
                 ["Shadowburn"] = {"Shadowburn", [17877]=false, [18867]=false, [18868]=false, [18869]=false, [18870]=false, [18871]=false, [27263]=false, [29341]=false, [30546]=false},
                 ["Stealth"] = {"Stealth", [1784]=false, [1785]=false, [1786]=false, [1787]=false, [1791]=false, [8822]=false, [30831]=false, [30991]=false, [31526]=false, [31621]=false, [32199]=false, [32615]=false, [34189]=false, [42347]=false, [42866]=false, [42943]=false},
@@ -1775,6 +1775,18 @@ function HEAT:LoadStaticData()
             },
             ["SPELL_SUMMON"] = {
                 ["Death by Peasant"] = {"Death by Peasant", [18307]=false, [18308]=false},
+            },
+            ["UNIT_AURA"] = {
+                ["Drink"] = {"Drinking", [430]=false, [431]=false, [432]=false, [1133]=false, [1135]=false, [1137]=false, [10250]=false, [22734]=false, [24355]=false, [25696]=false, [26261]=false, [26402]=false, [26473]=false, [26475]=false, [27089]=false, [29007]=false, [30024]=false, [34291]=false, [43154]=false, [43155]=false, [43706]=false, [46755]=false},
+                ["PvP Trinket"] = {"Trinketed", [28243]=false, [42292]=false},
+            },
+            ["UNIT_SPELLCAST_START"] = {
+                ["Drink"] = {"Drinking", [430]=false, [431]=false, [432]=false, [1133]=false, [1135]=false, [1137]=false, [10250]=false, [22734]=false, [24355]=false, [25696]=false, [26261]=false, [26402]=false, [26473]=false, [26475]=false, [27089]=false, [29007]=false, [30024]=false, [34291]=false, [43154]=false, [43155]=false, [43706]=false, [46755]=false},
+                ["PvP Trinket"] = {"Trinketed", [28243]=false, [42292]=false},
+            },
+            ["UNIT_SPELLCAST_SUCCEEDED"] = {
+                ["Drink"] = {"Drinking", [430]=false, [431]=false, [432]=false, [1133]=false, [1135]=false, [1137]=false, [10250]=false, [22734]=false, [24355]=false, [25696]=false, [26261]=false, [26402]=false, [26473]=false, [26475]=false, [27089]=false, [29007]=false, [30024]=false, [34291]=false, [43154]=false, [43155]=false, [43706]=false, [46755]=false},
+                ["PvP Trinket"] = {"Trinketed", [28243]=false, [42292]=false},
             },
         }
     end
