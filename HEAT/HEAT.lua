@@ -335,10 +335,11 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
                                 
                 self:StoreBuff(guid, spellID, {
                         destGUID = guid, 
+                        icon = icon,
                         duration = calculatedDuration, 
                         expirationTime = expirationTime,
-                        spellID = spellID, 
-                        icon = icon,
+                        spellID = spellID,
+                        name = spellName, 
                         startTime = (expirationTime and expirationTime > 0) and (expirationTime - duration) or now,
                         stacks = stackCount,
                         isScanned = true 
@@ -434,6 +435,7 @@ function HEAT:ProcessDataEvents(event, ...)
                     self:StoreBuff(sourceGUID, newStance, {
                         destGUID = sourceGUID,
                         spellID = newStance,
+                        name = spellName, 
                         icon = icon,
                         duration = INFINITY,
                         expirationTime = nil,
@@ -479,7 +481,8 @@ function HEAT:ProcessDataEvents(event, ...)
                             destGUID = destGUID, 
                             duration = buffDuration, 
                             expirationTime = expirationTime,
-                            spellID = spellID, 
+                            spellID = spellID,
+                            name = spellName,
                             icon = spellDataForApplication.icon, 
                             startTime = now,
                             stacks = currentStacks 
