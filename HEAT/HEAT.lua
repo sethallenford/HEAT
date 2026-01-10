@@ -34,7 +34,6 @@ local function init()
 
     local rawSpellData, defaultBuffs, defaultSounds = HEAT:LoadStaticData()
 
-    -- Nameplate Buffs: Convert List to Table and Assign
     if not HEAT.nameplateBuffs or not next(HEAT.nameplateBuffs) then
         HEAT.nameplateBuffs = {}
         if defaultBuffs then
@@ -1738,6 +1737,7 @@ function HEAT:LoadStaticData()
                 ["Find Minerals"] = {"Find Minerals", [2580]=false, [8388]=false},
                 ["Find Treasure"] = {"Find Treasure", [2481]=false},
                 ["Fishing"] = {"Fishing", [7620]=false, [7731]=false, [7732]=false, [13615]=false, [18248]=false, [24303]=false, [33095]=false, [45698]=false},
+                ["Freezing Trap"] = {"Freezing Trap", [1499]=false, [14310]=false, [14311]=false, [27753]=false, [31933]=false, [32419]=false, [37368]=false, [41085]=false, [43447]=false, [43448]=false, [44136]=false},
                 ["Frost Nova"] = {"Frost Nova", [122]=false, [865]=false, [6131]=false, [9915]=false, [10230]=false, [11831]=false, [12674]=false, [12748]=false, [14907]=false, [15063]=false, [15531]=false, [15532]=false, [22645]=false, [27088]=false, [29849]=false, [30094]=false, [31250]=false, [32192]=false, [32365]=false, [34326]=false, [36989]=false, [38033]=false, [39035]=false, [39063]=false, [43426]=false, [44177]=false, [45905]=false, [46555]=false},
                 ["Frost Trap"] = {"Frost Trap", [13809]=false},
                 ["Healing Potion"] = {"Healing Potion", [28495]=false},
