@@ -3,7 +3,7 @@
 ## Version:
 ## Title: HEAT (|cFFFFD700Hostile|r |cFFFF8C00Event|r |cFFFF4500Aura|r |cFFFF0000Tracker|r)
 ## SavedVariables:
-## SavedVariablesByCharacter: HEAT_PerCharDB
+## SavedVariablesByCharacter:
 ## OptionalDeps:
 ## AllowLoadGameType: tbc
 
