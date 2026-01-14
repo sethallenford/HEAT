@@ -1,6 +1,5 @@
 HEAT = HEAT or { initialized = false }
 
--- Sanitize Environment variables
 local PROJECT_ERA = WOW_PROJECT_CLASSIC or 1
 local PROJECT_TBC = WOW_PROJECT_BURNING_CRUSADE_CLASSIC or 2
 local PROJECT_WOTLK = WOW_PROJECT_WRATH_CLASSIC or 11
@@ -37,7 +36,6 @@ local function Init()
     
     HEAT.debug = true
     
-    -- Always reset these (Runtime Caches)
     HEAT.spellData = {}
     HEAT.storedBuffs = {}
     HEAT.spellIDMap = {} 
@@ -48,14 +46,12 @@ local function Init()
     HEAT.unitTokens = {}
     HEAT.hostilityCache = { cache = {}, head = nil, tail = nil, size = 0, maxSize = MAXSIZE }
     
-    -- Setup Constants
     HEAT.playerGUID = UnitGUID("player")
     HEAT.SOUND_PREFIX = "Interface\\AddOns\\HEAT\\Sounds\\"
     HEAT.CHANNEL = "Master"
     HEAT.fileExtension = ".ogg"
     HEAT.prefix = "HEAT"
     
-    -- Register Prefix safely
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
         C_ChatInfo.RegisterAddonMessagePrefix(HEAT.prefix)
     else
@@ -496,8 +492,6 @@ function HEAT:ProcessDataEvents(event, ...)
     local INFINITY = -1 
     
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        -- args 1-11 are standard. args 12-18 vary by subEvent.
-        --       1          2         3           4           5           6                7             8         9         10          11         12     13     14     15     16     17     18
         local timestamp, subEvent, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, arg12, arg13, arg14, arg15, arg16, arg17, arg18 = CombatLogGetCurrentEventInfo()
 
         -- Cleanup on Death
@@ -514,7 +508,6 @@ function HEAT:ProcessDataEvents(event, ...)
         
         -- Warrior Stance Inference
         if subEvent == "SPELL_CAST_SUCCESS" then
-            -- For CAST_SUCCESS, arg12 is SpellID
             local spellID = arg12
             
             if sourceGUID ~= self.playerGUID and self:IsEnemy(sourceGUID, sourceFlags) then
@@ -553,13 +546,11 @@ function HEAT:ProcessDataEvents(event, ...)
         local spellID, spellName, auraType, amount
         
         if isApplication or isRemoval then
-            -- Standard Aura Args: 12=ID, 13=Name, 14=School, 15=Type, 16=Amount
             spellID = arg12
             spellName = arg13
             auraType = arg15
             amount = arg16
         elseif isDispel then
-            -- Dispel Args: 12=CasterID ... 15=ExtraSpellID (Removed ID), 16=ExtraName, 17=ExtraSchool, 18=ExtraType
             spellID = arg15
             auraType = arg18
         end
@@ -1905,6 +1896,9 @@ HEAT.frame = HeatFrame
 HeatFrame:RegisterEvent("ADDON_LOADED")
 HeatFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 HeatFrame:RegisterEvent("ARENA_OPPONENT_UPDATE")
+--HeatFrame:RegisterEvent("ARENA_COOLDOWNS_UPDATE") -- Need to add to ProcessHostilityEvent
+--HeatFrame:RegisterEvent("ARENA_CROWD_CONTROL_SPELL_UPDATE") -- Need to add to ProcessHostilityEvent
+--HeatFrame:RegisterEvent("-ARENA_PREP_OPPONENT_SPECIALIZATIONS") -- Need to add to ProcessHostilityEvent
 HeatFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 HeatFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 HeatFrame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
