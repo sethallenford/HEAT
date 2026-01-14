@@ -1,5 +1,6 @@
 HEAT = HEAT or { initialized = false }
 
+-- Sanitize Environment variables
 local PROJECT_ERA = WOW_PROJECT_CLASSIC or 1
 local PROJECT_TBC = WOW_PROJECT_BURNING_CRUSADE_CLASSIC or 2
 local PROJECT_WOTLK = WOW_PROJECT_WRATH_CLASSIC or 11
@@ -36,6 +37,7 @@ local function Init()
     
     HEAT.debug = true
     
+    -- Always reset these (Runtime Caches)
     HEAT.spellData = {}
     HEAT.storedBuffs = {}
     HEAT.spellIDMap = {} 
@@ -46,19 +48,63 @@ local function Init()
     HEAT.unitTokens = {}
     HEAT.hostilityCache = { cache = {}, head = nil, tail = nil, size = 0, maxSize = MAXSIZE }
     
+    -- Setup Constants
     HEAT.playerGUID = UnitGUID("player")
     HEAT.SOUND_PREFIX = "Interface\\AddOns\\HEAT\\Sounds\\"
     HEAT.CHANNEL = "Master"
     HEAT.fileExtension = ".ogg"
     HEAT.prefix = "HEAT"
     
+    -- Register Prefix safely
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
         C_ChatInfo.RegisterAddonMessagePrefix(HEAT.prefix)
     else
         RegisterAddonMessagePrefix(HEAT.prefix)
     end
 
-    local rawSpellData, defaultBuffs, defaultSounds = HEAT.LoadStaticData and HEAT:LoadStaticData() or nil, nil, nil
+    HEAT.unitTokens = { "playerpet", "target", "focus", "mouseover" }
+    for i = 1, 5 do table.insert(HEAT.unitTokens, "boss"..i) end
+    for i = 1, 5 do table.insert(HEAT.unitTokens, "arena"..i) end
+    for i = 1, 5 do table.insert(HEAT.unitTokens, "arenapet"..i) end
+    for i = 1, 40 do table.insert(HEAT.unitTokens, "nameplate"..i) end
+    for i = 1, 4 do table.insert(HEAT.unitTokens, "party"..i) end
+    for i = 1, 4 do table.insert(HEAT.unitTokens, "partypet"..i) end
+    for i = 1, 40 do table.insert(HEAT.unitTokens, "raid"..i) end
+    for i = 1, 40 do table.insert(HEAT.unitTokens, "raidpet"..i) end
+    
+    HEAT.FLAGS = {
+        PLAYER = COMBATLOG_OBJECT_TYPE_PLAYER or 0x00000400,
+        NPC = COMBATLOG_OBJECT_TYPE_NPC or 0x00000800,
+        PET = COMBATLOG_OBJECT_TYPE_PET or 0x00002000,
+        GUARDIAN = COMBATLOG_OBJECT_TYPE_GUARDIAN or 0x00004000,
+        CONTROL_PLAYER = COMBATLOG_OBJECT_CONTROL_PLAYER or 0x00000100,
+        REACTION_FRIENDLY = COMBATLOG_OBJECT_REACTION_FRIENDLY or 0x00000010,
+        REACTION_NEUTRAL  = COMBATLOG_OBJECT_REACTION_NEUTRAL  or 0x00000020,
+        REACTION_HOSTILE  = COMBATLOG_OBJECT_REACTION_HOSTILE  or 0x00000040,
+        AFFILIATION_OUTSIDER = COMBATLOG_OBJECT_AFFILIATION_OUTSIDER or 0x00000008
+    };
+    
+    local rawSpellData, defaultBuffs, defaultSounds = HEAT:LoadStaticData()
+
+    if not HEAT.soundTable or not next(HEAT.soundTable) then
+        HEAT.soundTable = defaultSounds or {}
+    end
+
+    -- Process Sound Tables
+    if HEAT.soundTable["SPELL_AURA_APPLIED"] and not HEAT.soundTable["SPELL_AURA_REFRESH"] then
+        HEAT.soundTable["SPELL_AURA_REFRESH"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
+        HEAT.soundTable["UNIT_AURA"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
+    end
+
+    if HEAT.soundTable["SPELL_CAST_START"] then
+        HEAT.soundTable["UNIT_SPELLCAST_START"] = HEAT.soundTable["SPELL_CAST_START"]
+        HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_START"] = HEAT.soundTable["SPELL_CAST_START"] 
+        --HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_STOP"] = HEAT.soundTable["SPELL_CAST_START"] 
+    end
+
+    if HEAT.soundTable["SPELL_CAST_SUCCESS"] then
+        HEAT.soundTable["UNIT_SPELLCAST_SUCCEEDED"] = HEAT.soundTable["SPELL_CAST_SUCCESS"]
+    end
 
     if not HEAT.nameplateBuffs or not next(HEAT.nameplateBuffs) then
         HEAT.nameplateBuffs = {}
@@ -69,10 +115,6 @@ local function Init()
         end
     end
     
-    if not HEAT.soundTable or not next(HEAT.soundTable) then
-        HEAT.soundTable = defaultSounds or {}
-    end
-
     if currentProject and rawSpellData and rawSpellData ~= "" then
         local spellCount = 0
         local chunk = rawSpellData .. "^"
@@ -105,47 +147,12 @@ local function Init()
         print(string.format("|cFFFFD700H|r |cFFFF8C00E|r |cFFFF4500A|r |cFFFF0000T|r Successfully built and cached |cFF00FF00%d|r spells.", spellCount))
     end
 
-    HEAT.unitTokens = { "playerpet", "target", "focus", "mouseover" }
-    for i = 1, 5 do table.insert(HEAT.unitTokens, "boss"..i) end
-    for i = 1, 5 do table.insert(HEAT.unitTokens, "arena"..i) end
-    for i = 1, 5 do table.insert(HEAT.unitTokens, "arenapet"..i) end
-    for i = 1, 40 do table.insert(HEAT.unitTokens, "nameplate"..i) end
-    for i = 1, 4 do table.insert(HEAT.unitTokens, "party"..i) end
-    for i = 1, 4 do table.insert(HEAT.unitTokens, "partypet"..i) end
-    for i = 1, 40 do table.insert(HEAT.unitTokens, "raid"..i) end
-    for i = 1, 40 do table.insert(HEAT.unitTokens, "raidpet"..i) end
-    
-    HEAT.FLAGS = {
-        PLAYER = COMBATLOG_OBJECT_TYPE_PLAYER or 0x00000400,
-        NPC = COMBATLOG_OBJECT_TYPE_NPC or 0x00000800,
-        PET = COMBATLOG_OBJECT_TYPE_PET or 0x00002000,
-        GUARDIAN = COMBATLOG_OBJECT_TYPE_GUARDIAN or 0x00004000,
-        CONTROL_PLAYER = COMBATLOG_OBJECT_CONTROL_PLAYER or 0x00000100,
-        REACTION_FRIENDLY = COMBATLOG_OBJECT_REACTION_FRIENDLY or 0x00000010,
-        REACTION_NEUTRAL  = COMBATLOG_OBJECT_REACTION_NEUTRAL  or 0x00000020,
-        REACTION_HOSTILE  = COMBATLOG_OBJECT_REACTION_HOSTILE  or 0x00000040,
-        AFFILIATION_OUTSIDER = COMBATLOG_OBJECT_AFFILIATION_OUTSIDER or 0x00000008
-    }
-                            
-    -- Process Sound Tables
-    if HEAT.soundTable["SPELL_AURA_APPLIED"] and not HEAT.soundTable["SPELL_AURA_REFRESH"] then
-        HEAT.soundTable["SPELL_AURA_REFRESH"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
-        HEAT.soundTable["UNIT_AURA"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
-    end
-
-    if HEAT.soundTable["SPELL_CAST_START"] then
-        HEAT.soundTable["UNIT_SPELLCAST_START"] = HEAT.soundTable["SPELL_CAST_START"]
-        HEAT.soundTable["UNIT_SPELLCAST_CHANNEL_START"] = HEAT.soundTable["SPELL_CAST_START"] 
-    end
-
-    if HEAT.soundTable["SPELL_CAST_SUCCESS"] then
-        HEAT.soundTable["UNIT_SPELLCAST_SUCCEEDED"] = HEAT.soundTable["SPELL_CAST_SUCCESS"]
-    end
-
     if HEAT.soundTable then
         for eventType, eventSpells in pairs(HEAT.soundTable) do
             HEAT.spellIDMap[eventType] = {}
             for key, data in pairs(eventSpells) do
+                -- We now support using the Key as the sound filename (e.g. ["Feign Death"] = {...})
+                -- Or finding it at index 1 (legacy support)
                 if type(data) == "table" then
                     local soundFile
                     if type(data[1]) == "string" then
@@ -492,6 +499,8 @@ function HEAT:ProcessDataEvents(event, ...)
     local INFINITY = -1 
     
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+        -- args 1-11 are standard. args 12-18 vary by subEvent.
+        --       1          2         3           4           5           6                7             8         9         10          11         12     13     14     15     16     17     18
         local timestamp, subEvent, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, arg12, arg13, arg14, arg15, arg16, arg17, arg18 = CombatLogGetCurrentEventInfo()
 
         -- Cleanup on Death
@@ -508,6 +517,7 @@ function HEAT:ProcessDataEvents(event, ...)
         
         -- Warrior Stance Inference
         if subEvent == "SPELL_CAST_SUCCESS" then
+            -- For CAST_SUCCESS, arg12 is SpellID
             local spellID = arg12
             
             if sourceGUID ~= self.playerGUID and self:IsEnemy(sourceGUID, sourceFlags) then
@@ -546,11 +556,13 @@ function HEAT:ProcessDataEvents(event, ...)
         local spellID, spellName, auraType, amount
         
         if isApplication or isRemoval then
+            -- Standard Aura Args: 12=ID, 13=Name, 14=School, 15=Type, 16=Amount
             spellID = arg12
             spellName = arg13
             auraType = arg15
             amount = arg16
         elseif isDispel then
+            -- Dispel Args: 12=CasterID ... 15=ExtraSpellID (Removed ID), 16=ExtraName, 17=ExtraSchool, 18=ExtraType
             spellID = arg15
             auraType = arg18
         end
@@ -645,7 +657,7 @@ function HEAT:ProcessHostilityEvent(event, ...)
                 local unit, type = ...
                 if type == "cleared" or type == "destroyed" then
                     self:ClearUnitCache(unit)
-                else
+                elseif type == "seen" then
                     self:UpdateUnitCache(unit)
                 end
             end
@@ -1291,8 +1303,8 @@ function HEAT:LoadStaticData()
 
         defaultBuffs = {
             "Avenging Wrath",
-            --"Battle Shout",
-            --"Battle Stance",
+            "Battle Shout",
+            "Battle Stance",
             "Berserker Rage",
             "Berserking",
             "Blade Flurry",
@@ -1300,12 +1312,11 @@ function HEAT:LoadStaticData()
             "Blessing of Protection",
             "Blessing of Sacrifice",
             "Blood Fury",
-            --"Camouflage",
-            --"Cat Form",
-            "Cloak of Shadows",
+            "Camouflage",
+            "Cat Form",
             "Death Wish",
             "Deterrence",
-            --"Dire Bear Form",
+            "Dire Bear Form",
             "Divine Illumination",
             "Divine Intervention",
             "Divine Protection",
@@ -1316,14 +1327,13 @@ function HEAT:LoadStaticData()
             "Fear Ward",
             "First Aid",
             "Flee",
-            --"Flight Form",
+            "Flight Form",
             "Free Action",
-            --"Ghost Wolf",
-            "Ghostly Strike",
-            --"Hide",
+            "Ghost Wolf",
+            "Hide",
             "Honorless Target",
             "Ice Block",
-            --"Inner Fire",
+            "Inner Fire",
             "Innervate",
             "Invulnerability",
             "Last Stand",
@@ -1332,21 +1342,21 @@ function HEAT:LoadStaticData()
             "Perception",
             "Petrification",
             "Presence of Mind",
-            --"Prowl",
+            "Prowl",
             "Rapid Fire",
             "Recklessness",
             "Retaliation",
-            --"Shadowmeld",
+            "Shadowmeld",
             "Shield Wall",
             "Slice and Dice",
             "Sprint",
-            --"Stealth",
+            "Stealth",
             "Stoneform",
             "Stormpike's Salvation",
-            --"Subterfuge",
+            "Subterfuge",
             "Sweeping Strikes",
-            --"Travel Form",
-            --"Water Shield",
+            "Travel Form",
+            "Water Shield",
             "Will of the Forsaken",
         }
 
@@ -1394,7 +1404,7 @@ function HEAT:LoadStaticData()
                 ["Earthbind Totem"] = {"Earthbind Totem", [2484]=false, [15786]=false, [38304]=false},
                 ["Electrified Net"] = {"Electrified Net", [11820]=false, [11825]=false, [35107]=false, [35107]=false, [35107]=false, [35108]=false, [43362]=false, [43363]=false},
                 ["Elune's Grace"] = {"Elune's Grace", [2651]=false},
-                --["Enrage"] = {"Enrage", [3019]=false, [5229]=false, [8269]=false, [8599]=false, [12317]=false, [12686]=false, [12795]=false, [12880]=false, [13045]=false, [13046]=false, [13047]=false, [13048]=false, [14201]=false, [14202]=false, [14203]=false, [14204]=false, [15061]=false, [15097]=false, [15716]=false, [18501]=false, [19516]=false, [19953]=false, [23537]=false, [24318]=false, [26527]=false, [27897]=false, [28131]=false, [28468]=false, [28747]=false, [28798]=false, [29691]=false, [30485]=false, [32964]=false, [33653]=false, [34409]=false, [34624]=false, [34670]=false, [34970]=false, [34971]=false, [36992]=false, [37023]=false, [37648]=false, [37975]=false, [38046]=false, [38947]=false, [39249]=false, [40683]=false, [40743]=false, [41305]=false, [41447]=false, [44779]=false, [45111]=false},
+                ["Enrage"] = {"Enrage", [3019]=false, [5229]=false, [8269]=false, [8599]=false, [12317]=false, [12686]=false, [12795]=false, [12880]=false, [13045]=false, [13046]=false, [13047]=false, [13048]=false, [14201]=false, [14202]=false, [14203]=false, [14204]=false, [15061]=false, [15097]=false, [15716]=false, [18501]=false, [19516]=false, [19953]=false, [23537]=false, [24318]=false, [26527]=false, [27897]=false, [28131]=false, [28468]=false, [28747]=false, [28798]=false, [29691]=false, [30485]=false, [32964]=false, [33653]=false, [34409]=false, [34624]=false, [34670]=false, [34970]=false, [34971]=false, [36992]=false, [37023]=false, [37648]=false, [37975]=false, [38046]=false, [38947]=false, [39249]=false, [40683]=false, [40743]=false, [41305]=false, [41447]=false, [44779]=false, [45111]=false},
                 ["Fade"] = {"Fade", [586]=false, [9578]=false, [9579]=false, [9592]=false, [10941]=false, [10942]=false, [12685]=false, [20672]=false, [25429]=false, [44036]=false},
                 ["Faerie Fire"] = {"Faerie Fire", [770]=false, [778]=false, [6950]=false, [9749]=false, [9907]=false, [13424]=false, [13752]=false, [16498]=false, [20656]=false, [21670]=false, [25602]=false, [26993]=false, [32129]=false},
                 ["Fear Ward"] = {"Fear Ward", [6346]=false},
@@ -1402,8 +1412,8 @@ function HEAT:LoadStaticData()
                 ["Fire Shield"] = {"Fire Shield", [134]=false, [2947]=false, [2949]=false, [8316]=false, [8317]=false, [8318]=false, [8319]=false, [11350]=false, [11351]=false, [11770]=false, [11771]=false, [11772]=false, [11773]=false, [11968]=false, [13376]=false, [18968]=false, [19627]=false, [20322]=false, [20323]=false, [20324]=false, [20326]=false, [20327]=false, [27269]=false, [27486]=false, [27489]=false, [30513]=false, [30514]=false, [32749]=false, [32751]=false, [35265]=false, [35266]=false, [36907]=false, [37282]=false, [37283]=false, [37318]=false, [37434]=false, [38732]=false, [38733]=false, [38855]=false, [38893]=false, [38901]=false, [38902]=false, [38933]=false, [38934]=false},
                 ["Flee"] = {"Flee", [5024]=false},
                 ["Food"] = {"Eating", [433]=false, [434]=false, [435]=false, [1127]=false, [1129]=false, [1131]=false, [2639]=false, [5004]=false, [5005]=false, [5006]=false, [5007]=false, [6410]=false, [7737]=false, [10256]=false, [10257]=false, [18229]=false, [18230]=false, [18231]=false, [18232]=false, [18233]=false, [18234]=false, [22731]=false, [24005]=false, [24707]=false, [24800]=false, [24869]=false, [25660]=false, [25695]=false, [25700]=false, [25702]=false, [25886]=false, [25888]=false, [26260]=false, [26401]=false, [26472]=false, [26474]=false, [27094]=false, [28616]=false, [29008]=false, [29073]=false, [32112]=false, [33253]=false, [33255]=false, [33258]=false, [33260]=false, [33262]=false, [33264]=false, [33266]=false, [33269]=false, [33725]=false, [33773]=false, [35270]=false, [35271]=false, [40543]=false, [40745]=false, [40768]=false, [41030]=false, [42311]=false, [43763]=false, [43777]=false, [45618]=false, [46683]=false, [46812]=false, [46898]=false},
-                --["Frost Armor"] = {"Frost Armor", [168]=false, [7300]=false, [7301]=false, [12544]=false, [12556]=false, [15784]=false, [18100]=false, [31256]=false},
-                --["Frost Ward"] = {"Frost Ward", [6143]=false, [8461]=false, [8462]=false, [10177]=false, [15044]=false, [25641]=false, [28609]=false, [32796]=false},
+                ["Frost Armor"] = {"Frost Armor", [168]=false, [7300]=false, [7301]=false, [12544]=false, [12556]=false, [15784]=false, [18100]=false, [31256]=false},
+                ["Frost Ward"] = {"Frost Ward", [6143]=false, [8461]=false, [8462]=false, [10177]=false, [15044]=false, [25641]=false, [28609]=false, [32796]=false},
                 ["Ghostly Strike"] = {"Ghostly Strike", [14278]=false, [31022]=false},
                 ["Gnomish Mind Control Cap"] = {"Gnomish Mind Control Cap", [12907]=false, [13180]=false, [13181]=false, [26740]=false},
                 ["Goblin Rocket Boots"] = {"Goblin Rocket Boots", [8892]=false, [8895]=false},
@@ -1411,12 +1421,13 @@ function HEAT:LoadStaticData()
                 ["Grounding Totem"] = {"Grounding Totem", [8177]=false, [34079]=false},
                 ["Hammer of Justice"] = {"Hammer of Justice", [853]=false, [5588]=false, [5589]=false, [10308]=false, [13005]=false, [32416]=false, [37369]=false, [39077]=false, [41468]=false},
                 ["Healing Stream Totem"] = {"Healing Stream Totem", [5394]=false, [5396]=false, [6375]=false, [6377]=false, [10462]=false, [10463]=false, [25567]=false, [35199]=false},
+                ["Hide"] = {"Hide", [6920]=false},
                 ["Holy Shield"] = {"Holy Shield", [9800]=false, [20925]=false, [20927]=false, [20928]=false, [27179]=false, [31904]=false, [32777]=false},
                 ["Honorless Target"] = {"Honorless Target", [2479]=false, [46705]=false},
-                --["Ice Armor"] = {"Ice Armor", [7302]=false, [7320]=false, [10219]=false, [10220]=false, [27124]=false, [36881]=false},
+                ["Ice Armor"] = {"Ice Armor", [7302]=false, [7320]=false, [10219]=false, [10220]=false, [27124]=false, [36881]=false},
                 ["Ice Barrier"] = {"Ice Barrier", [11426]=false, [13031]=false, [13032]=false, [13033]=false, [27134]=false, [33245]=false, [33405]=false},
                 ["Ice Block"] = {"Ice Block", [27619]=false, [36911]=false, [41590]=false, [45438]=false, [46604]=false},
-                --["Inner Fire"] = {"Inner Fire", [588]=false, [602]=false, [1006]=false, [7128]=false, [10951]=false, [10952]=false, [25431]=false},
+                ["Inner Fire"] = {"Inner Fire", [588]=false, [602]=false, [1006]=false, [7128]=false, [10951]=false, [10952]=false, [25431]=false},
                 ["Inner Focus"] = {"Inner Focus", [14751]=false},
                 ["Innervate"] = {"Innervate", [29166]=false},
                 ["Insect Swarm"] = {"Insect Swarm", [5570]=false, [24974]=false, [24975]=false, [24976]=false, [24977]=false, [27013]=false},
@@ -1424,7 +1435,7 @@ function HEAT:LoadStaticData()
                 ["Kidney Shot"] = {"Kidney Shot", [408]=false, [8643]=false, [27615]=false, [30621]=false, [30832]=false, [32864]=false, [41389]=false},
                 ["Last Stand"] = {"Last Stand", [12975]=false, [12976]=false},
                 ["Levitate"] = {"Levitate", [1706]=false, [27986]=false, [31704]=false, [52970]=false},
-                --["Lightning Shield"] = {"Lightning Shield", [324]=false, [325]=false, [905]=false, [945]=false, [8134]=false, [8788]=false, [10431]=false, [10432]=false, [12550]=false, [13585]=false, [15507]=false, [19514]=false, [20545]=false, [23551]=false, [23552]=false, [25020]=false, [25469]=false, [25472]=false, [26363]=false, [26364]=false, [26365]=false, [26366]=false, [26367]=false, [26369]=false, [26370]=false, [26371]=false, [26372]=false, [27635]=false, [28820]=false, [28821]=false, [31765]=false, [39067]=false, [41151]=false},
+                ["Lightning Shield"] = {"Lightning Shield", [324]=false, [325]=false, [905]=false, [945]=false, [8134]=false, [8788]=false, [10431]=false, [10432]=false, [12550]=false, [13585]=false, [15507]=false, [19514]=false, [20545]=false, [23551]=false, [23552]=false, [25020]=false, [25469]=false, [25472]=false, [26363]=false, [26364]=false, [26365]=false, [26366]=false, [26367]=false, [26369]=false, [26370]=false, [26371]=false, [26372]=false, [27635]=false, [28820]=false, [28821]=false, [31765]=false, [39067]=false, [41151]=false},
                 ["Mage Armor"] = {"Mage Armor", [6117]=false, [22782]=false, [22783]=false, [27125]=false},
                 ["Major Dreamless Sleep"] = {"Major Dreamless Sleep", [28504]=false},
                 ["Magma Totem"] = {"Magma Totem", [8187]=false, [8190]=false, [10579]=false, [10580]=false, [10581]=false, [10585]=false, [10586]=false, [10587]=false, [25550]=false, [25552]=false},
@@ -1434,25 +1445,26 @@ function HEAT:LoadStaticData()
                 ["Nature's Grasp"] = {"Nature's Grasp", [16689]=false, [16810]=false, [16811]=false, [16812]=false, [16813]=false, [17329]=false, [27009]=false},
                 ["Nature's Swiftness"] = {"Nature's Swiftness", [16188]=false, [17116]=false, [29274]=false},
                 ["Noggenfogger Elixir"] = {"Noggenfogger Elixir", [16589]=false, [16591]=false, [16593]=false, [16595]=false},
-                --["Omen of Clarity"] = {"Omen of Clarity", [16864]=false},
+                ["Omen of Clarity"] = {"Omen of Clarity", [16864]=false},
                 ["Perception"] = {"Perception", [20600]=false},
                 ["Poison Cleansing Totem"] = {"Poison Cleansing Totem", [8166]=false, [38306]=false},
                 ["Polymorph Backfire"] = {"Polymorph Backfire", [28406]=false},
                 ["Pounce"] = {"Pounce", [9005]=false, [9823]=false, [9827]=false, [27006]=false, [39449]=false, [43356]=false},
                 ["Power Infusion"] = {"Power Infusion", [10060]=false, [37274]=false},
-                --["Power Word: Fortitude"] = {"Power Word Fortitude", [1243]=false, [1244]=false, [1245]=false, [2791]=false, [10937]=false, [10938]=false, [13864]=false, [23947]=false, [23948]=false, [25389]=false, [36004]=false},
+                ["Power Word: Fortitude"] = {"Power Word Fortitude", [1243]=false, [1244]=false, [1245]=false, [2791]=false, [10937]=false, [10938]=false, [13864]=false, [23947]=false, [23948]=false, [25389]=false, [36004]=false},
                 ["Power Word: Shield"] = {"Power Word Shield", [17]=false, [592]=false, [600]=false, [3747]=false, [6065]=false, [6066]=false, [10898]=false, [10899]=false, [10900]=false, [10901]=false, [11647]=false, [11835]=false, [11974]=false, [17139]=false, [20697]=false, [22187]=false, [25217]=false, [25218]=false, [27607]=false, [29408]=false, [32595]=false, [35944]=false, [36052]=false, [41373]=false, [44175]=false, [44291]=false, [46193]=false},
-                --["Prayer of Fortitude"] = {"Prayer of Fortitude", [21562]=false, [21564]=false, [25392]=false, [39231]=false},
-                --["Prayer of Shadow Protection"] = {"Prayer of Shadow Protection", [27683]=false, [39236]=false, [39374]=false},
+                ["Prayer of Fortitude"] = {"Prayer of Fortitude", [21562]=false, [21564]=false, [25392]=false, [39231]=false},
+                ["Prayer of Shadow Protection"] = {"Prayer of Shadow Protection", [27683]=false, [39236]=false, [39374]=false},
                 ["Premeditation"] = {"Premeditation", [14183]=false},
                 ["Presence of Mind"] = {"Presence of Mind", [12043]=false, [29976]=false},
                 ["Prowl"] = {"Prowl", [5215]=false, [6783]=false, [8152]=false, [9913]=false, [24450]=false, [24451]=false, [24452]=false, [24453]=false, [24454]=false, [24455]=false, [42932]=false},
-                ["PvP Trinket"] = {"Trinketed", [28243]=false, [42292]=false},
+                ["PvP Trinket"] = {"Trinketed Hunter", [28243]=false},
+                ["PvP Trinket"] = {"Trinketed Warrior", [42292]=false},
                 ["Rapid Fire"] = {"Rapid Fire", [3045]=false, [28755]=false, [36828]=false},
                 ["Reckless Charge"] = {"Reckless Charge", [13327]=false, [22641]=false, [22646]=false},
                 ["Recklessness"] = {"Recklessness", [1719]=false, [13847]=false},
-                --["Rejuvenation"] = {"Rejuvenation", [774]=false, [1058]=false, [1430]=false, [2090]=false, [2091]=false, [3627]=false, [8070]=false, [8910]=false, [9839]=false, [9840]=false, [9841]=false, [12160]=false, [15981]=false, [20664]=false, [20701]=false, [25299]=false, [26981]=false, [26982]=false, [27532]=false, [28716]=false, [28722]=false, [28723]=false, [28724]=false, [31782]=false, [32131]=false, [38657]=false},
-                --["Renew"] = {"Renew", [139]=false, [6074]=false, [6075]=false, [6076]=false, [6077]=false, [6078]=false, [8362]=false, [10927]=false, [10928]=false, [10929]=false, [11640]=false, [22168]=false, [23895]=false, [25058]=false, [25221]=false, [25222]=false, [25315]=false, [27606]=false, [28807]=false, [31325]=false, [34423]=false, [36679]=false, [36969]=false, [37260]=false, [37978]=false, [38210]=false, [41456]=false, [44174]=false, [45859]=false, [46192]=false, [46563]=false, [47079]=false},
+                ["Rejuvenation"] = {"Rejuvenation", [774]=false, [1058]=false, [1430]=false, [2090]=false, [2091]=false, [3627]=false, [8070]=false, [8910]=false, [9839]=false, [9840]=false, [9841]=false, [12160]=false, [15981]=false, [20664]=false, [20701]=false, [25299]=false, [26981]=false, [26982]=false, [27532]=false, [28716]=false, [28722]=false, [28723]=false, [28724]=false, [31782]=false, [32131]=false, [38657]=false},
+                ["Renew"] = {"Renew", [139]=false, [6074]=false, [6075]=false, [6076]=false, [6077]=false, [6078]=false, [8362]=false, [10927]=false, [10928]=false, [10929]=false, [11640]=false, [22168]=false, [23895]=false, [25058]=false, [25221]=false, [25222]=false, [25315]=false, [27606]=false, [28807]=false, [31325]=false, [34423]=false, [36679]=false, [36969]=false, [37260]=false, [37978]=false, [38210]=false, [41456]=false, [44174]=false, [45859]=false, [46192]=false, [46563]=false, [47079]=false},
                 ["Repentance"] = {"Repentance", [20066]=false, [29511]=false, [29511]=false, [32779]=false},
                 ["Resurrection Sickness"] = {"Resurrection Sickness", [15007]=false},
                 ["Retaliation"] = {"Retaliation", [20230]=false, [20240]=false, [22857]=false, [22858]=false, [40546]=false},
@@ -1473,6 +1485,7 @@ function HEAT:LoadStaticData()
                 ["Siphon Life"] = {"Siphon Life", [18265]=false, [18879]=false, [18880]=false, [18881]=false, [27264]=false, [30911]=false, [35195]=false, [41597]=false},
                 ["Slice and Dice"] = {"Slice and Dice", [5171]=false, [6434]=false, [6774]=false, [30470]=false, [43547]=false},
                 ["Slow Fall"] = {"Slow Fall", [130]=false, [12438]=false},
+                ["Sneak"] = {"Sneak", [7104]=false, [8218]=false, [11013]=false, [22766]=false, [37717]=false},
                 ["Spell Lock"] = {"Spell Lock", [19244]=false, [19647]=false, [19648]=false, [19650]=false, [20433]=false, [20434]=false, [24259]=false, [30849]=false},
                 ["Spell Reflection"] = {"Spell Reflection", [9941]=false, [9943]=false, [10074]=false, [11818]=false, [21118]=false, [23920]=false, [31533]=false, [31534]=false, [31554]=false, [31554]=false, [31554]=false, [33961]=false, [33961]=false, [33961]=false, [34783]=false, [35399]=false, [36096]=false, [37885]=false, [38331]=false, [38592]=false, [38592]=false, [38599]=false, [43443]=false},
                 ["Sprint"] = {"Sprint", [2983]=false, [8696]=false, [11305]=false, [32720]=false},
@@ -1490,13 +1503,13 @@ function HEAT:LoadStaticData()
                 ["Swiftness Potion"] = {"Swiftness Potion", [2335]=false},
                 ["Tidal Charm"] = {"Tidal Charm", [835]=false},
                 ["Tiger's Fury"] = {"Tiger's Fury", [5217]=false, [6793]=false, [9845]=false, [9846]=false},
-                --["Touch of Weakness"] = {"Touch of Weakness", [2652]=false, [2943]=false, [19249]=false, [19251]=false, [19252]=false, [19253]=false, [19254]=false, [19261]=false, [19262]=false, [19264]=false, [19265]=false, [19266]=false, [25460]=false, [25461]=false, [28598]=false},
-                --["Travel Form"] = {"Travel Form", [783]=false, [32447]=false},
+                ["Touch of Weakness"] = {"Touch of Weakness", [2652]=false, [2943]=false, [19249]=false, [19251]=false, [19252]=false, [19253]=false, [19254]=false, [19261]=false, [19262]=false, [19264]=false, [19265]=false, [19266]=false, [25460]=false, [25461]=false, [28598]=false},
+                ["Travel Form"] = {"Travel Form", [783]=false, [32447]=false},
                 ["Tremor Totem"] = {"Tremor Totem", [8143]=false},
                 ["Unending Breath"] = {"Unending Breath", [5697]=false},
                 ["Vampiric Embrace"] = {"Vampiric Embrace", [15286]=false, [15290]=false},
                 ["Vanish"] = {"Vanish", [1856]=false, [1857]=false, [11327]=false, [11329]=false, [24223]=false, [24228]=false, [24229]=false, [24230]=false, [24231]=false, [24232]=false, [24233]=false, [24699]=false, [26888]=false, [26889]=false, [27617]=false, [29448]=false, [31619]=false, [35205]=false, [39667]=false, [41476]=false, [41479]=false, [44290]=false},
-                --["Water Breathing"] = {"Water Breathing", [131]=false, [7178]=false, [11789]=false, [16881]=false, [40621]=false},
+                ["Water Breathing"] = {"Water Breathing", [131]=false, [7178]=false, [11789]=false, [16881]=false, [40621]=false},
                 ["Water Walking"] = {"Water Walking", [546]=false, [11319]=false},
                 ["Will of the Forsaken"] = {"Will of the Forsaken", [7744]=false},
                 ["Windfury Totem"] = {"Windfury Totem", [8512]=false, [8516]=false, [10608]=false, [10610]=false, [10613]=false, [10614]=false, [25585]=false, [25587]=false, [27621]=false},
@@ -1515,8 +1528,8 @@ function HEAT:LoadStaticData()
                 ["Blessing of Freedom"] = {"Blessing of Freedom Down", [1044]=false},
                 ["Blessing of Protection"] = {"Blessing of Protection Down", [1022]=false, [5599]=false, [10278]=false, [41450]=false},
                 ["Blind"] = {"Blind Down", [2094]=false, [21060]=false, [34654]=false, [34694]=false, [43433]=false},
-                --["Blood Fury"] = {"Blood Fury Down", [20572]=false, [23230]=false, [24571]=false, [33697]=false, [33702]=false},
-                --["Bloodrage"] = {"Bloodrage Down", [2687]=false, [29131]=false},
+                ["Blood Fury"] = {"Blood Fury Down", [20572]=false, [23230]=false, [24571]=false, [33697]=false, [33702]=false},
+                ["Bloodrage"] = {"Bloodrage Down", [2687]=false, [29131]=false},
                 ["Counterspell"] = {"Counterspell Down", [2139]=false, [15122]=false, [19715]=false, [20537]=false, [20788]=false, [29443]=false, [29961]=false, [31596]=false, [31999]=false, [37470]=false},
                 ["Cower"] = {"Cower Down", [1742]=false, [1747]=false, [1748]=false, [1749]=false, [1750]=false, [1751]=false, [1753]=false, [1754]=false, [1755]=false, [1756]=false, [8998]=false, [9000]=false, [9892]=false, [16697]=false, [16698]=false, [27004]=false, [27048]=false, [27346]=false, [31709]=false},
                 ["Dash"] = {"Dash Down", [1850]=false, [9821]=false, [23099]=false, [23100]=false, [23109]=false, [23110]=false, [23111]=false, [23112]=false, [33357]=false, [36589]=false, [43317]=false, [44029]=false},
@@ -1534,7 +1547,7 @@ function HEAT:LoadStaticData()
                 ["Earthbind Totem"] = {"Earthbind Totem Down", [2484]=false, [15786]=false, [38304]=false},
                 ["Electrified Net"] = {"Electrified Net Down", [11820]=false, [11825]=false, [35107]=false, [35107]=false, [35107]=false, [35108]=false, [43362]=false, [43363]=false},
                 ["Elune's Grace"] = {"Elune's Grace Down", [2651]=false},
-                --["Enrage"] = {"Enrage Down", [3019]=false, [5229]=false, [8269]=false, [8599]=false, [12317]=false, [12686]=false, [12795]=false, [12880]=false, [13045]=false, [13046]=false, [13047]=false, [13048]=false, [14201]=false, [14202]=false, [14203]=false, [14204]=false, [15061]=false, [15097]=false, [15716]=false, [18501]=false, [19516]=false, [19953]=false, [23537]=false, [24318]=false, [26527]=false, [27897]=false, [28131]=false, [28468]=false, [28747]=false, [28798]=false, [29691]=false, [30485]=false, [32964]=false, [33653]=false, [34409]=false, [34624]=false, [34670]=false, [34970]=false, [34971]=false, [36992]=false, [37023]=false, [37648]=false, [37975]=false, [38046]=false, [38947]=false, [39249]=false, [40683]=false, [40743]=false, [41305]=false, [41447]=false, [44779]=false, [45111]=false},
+                ["Enrage"] = {"Enrage Down", [3019]=false, [5229]=false, [8269]=false, [8599]=false, [12317]=false, [12686]=false, [12795]=false, [12880]=false, [13045]=false, [13046]=false, [13047]=false, [13048]=false, [14201]=false, [14202]=false, [14203]=false, [14204]=false, [15061]=false, [15097]=false, [15716]=false, [18501]=false, [19516]=false, [19953]=false, [23537]=false, [24318]=false, [26527]=false, [27897]=false, [28131]=false, [28468]=false, [28747]=false, [28798]=false, [29691]=false, [30485]=false, [32964]=false, [33653]=false, [34409]=false, [34624]=false, [34670]=false, [34970]=false, [34971]=false, [36992]=false, [37023]=false, [37648]=false, [37975]=false, [38046]=false, [38947]=false, [39249]=false, [40683]=false, [40743]=false, [41305]=false, [41447]=false, [44779]=false, [45111]=false},
                 ["Evasion"] = {"Evasion Down", [4086]=false, [5277]=false, [15087]=false, [26669]=false, [31379]=false, [37683]=false, [38541]=false},
                 ["Evocation"] = {"Evocation Down", [12051]=false, [28763]=false, [30254]=false, [30935]=false, [30972]=false, [45052]=false},
                 ["Faerie Fire"] = {"Faerie Fire Down", [770]=false, [778]=false, [6950]=false, [9749]=false, [9907]=false, [13424]=false, [13752]=false, [16498]=false, [20656]=false, [21670]=false, [25602]=false, [26993]=false, [32129]=false},
@@ -1562,8 +1575,8 @@ function HEAT:LoadStaticData()
                 ["Kidney Shot"] = {"Kidney Shot Down", [408]=false, [8643]=false, [27615]=false, [30621]=false, [30832]=false, [32864]=false, [41389]=false},
                 ["Last Stand"] = {"Last Stand Down", [12975]=false, [12976]=false},
                 ["Levitate"] = {"Levitate Down", [1706]=false, [27986]=false, [31704]=false, [52970]=false},
-                --["Lightning Shield"] = {"Lightning Shield Down", [324]=false, [325]=false, [905]=false, [945]=false, [8134]=false, [8788]=false, [10431]=false, [10432]=false, [12550]=false, [13585]=false, [15507]=false, [19514]=false, [20545]=false, [23551]=false, [23552]=false, [25020]=false, [25469]=false, [25472]=false, [26363]=false, [26364]=false, [26365]=false, [26366]=false, [26367]=false, [26369]=false, [26370]=false, [26371]=false, [26372]=false, [27635]=false, [28820]=false, [28821]=false, [31765]=false, [39067]=false, [41151]=false},
-                --["Mage Armor"] = {"Mage Armor Down", [6117]=false, [22782]=false, [22783]=false, [27125]=false},
+                ["Lightning Shield"] = {"Lightning Shield Down", [324]=false, [325]=false, [905]=false, [945]=false, [8134]=false, [8788]=false, [10431]=false, [10432]=false, [12550]=false, [13585]=false, [15507]=false, [19514]=false, [20545]=false, [23551]=false, [23552]=false, [25020]=false, [25469]=false, [25472]=false, [26363]=false, [26364]=false, [26365]=false, [26366]=false, [26367]=false, [26369]=false, [26370]=false, [26371]=false, [26372]=false, [27635]=false, [28820]=false, [28821]=false, [31765]=false, [39067]=false, [41151]=false},
+                ["Mage Armor"] = {"Mage Armor Down", [6117]=false, [22782]=false, [22783]=false, [27125]=false},
                 ["Magma Totem"] = {"Magma Totem Down", [8187]=false, [8190]=false, [10579]=false, [10580]=false, [10581]=false, [10585]=false, [10586]=false, [10587]=false, [25550]=false, [25552]=false},
                 ["Mana Shield"] = {"Mana Shield Down", [1463]=false, [8494]=false, [8495]=false, [10191]=false, [10192]=false, [10193]=false, [17740]=false, [17741]=false, [27131]=false, [29880]=false, [30973]=false, [31635]=false, [35064]=false, [38151]=false, [46151]=false},
                 ["Mana Spring Totem"] = {"Mana Spring Totem Down", [5675]=false, [10495]=false, [10496]=false, [10497]=false, [24854]=false, [25570]=false},
@@ -1571,7 +1584,7 @@ function HEAT:LoadStaticData()
                 ["Nature's Grasp"] = {"Nature's Grasp Down", [16689]=false, [16810]=false, [16811]=false, [16812]=false, [16813]=false, [17329]=false, [27009]=false},
                 ["Nature's Swiftness"] = {"Nature's Swiftness Down", [16188]=false, [17116]=false, [29274]=false},
                 ["Noggenfogger Elixir"] = {"Noggenfogger Elixir Down", [16589]=false, [16591]=false, [16593]=false, [16595]=false},
-                --["Omen of Clarity"] = {"Omen of Clarity Down", [16864]=false},
+                ["Omen of Clarity"] = {"Omen of Clarity Down", [16864]=false},
                 ["Perception"] = {"Perception Down", [20600]=false},
                 ["Poison Cleansing Totem"] = {"Poison Cleansing Totem Down", [8166]=false, [38306]=false},
                 ["Polymorph Backfire"] = {"Polymorph Backfire Down", [28406]=false},
@@ -1587,8 +1600,8 @@ function HEAT:LoadStaticData()
                 ["Rapid Fire"] = {"Rapid Fire Down", [3045]=false, [28755]=false, [36828]=false},
                 ["Reckless Charge"] = {"Reckless Charge Down", [13327]=false, [22641]=false, [22646]=false},
                 ["Recklessness"] = {"Recklessness Down", [1719]=false, [13847]=false},
-                --["Rejuvenation"] = {"Rejuvenation Down", [774]=false, [1058]=false, [1430]=false, [2090]=false, [2091]=false, [3627]=false, [8070]=false, [8910]=false, [9839]=false, [9840]=false, [9841]=false, [12160]=false, [15981]=false, [20664]=false, [20701]=false, [25299]=false, [26981]=false, [26982]=false, [27532]=false, [28716]=false, [28722]=false, [28723]=false, [28724]=false, [31782]=false, [32131]=false, [38657]=false},
-                --["Renew"] = {"Renew Down", [139]=false, [6074]=false, [6075]=false, [6076]=false, [6077]=false, [6078]=false, [8362]=false, [10927]=false, [10928]=false, [10929]=false, [11640]=false, [22168]=false, [23895]=false, [25058]=false, [25221]=false, [25222]=false, [25315]=false, [27606]=false, [28807]=false, [31325]=false, [34423]=false, [36679]=false, [36969]=false, [37260]=false, [37978]=false, [38210]=false, [41456]=false, [44174]=false, [45859]=false, [46192]=false, [46563]=false, [47079]=false},
+                ["Rejuvenation"] = {"Rejuvenation Down", [774]=false, [1058]=false, [1430]=false, [2090]=false, [2091]=false, [3627]=false, [8070]=false, [8910]=false, [9839]=false, [9840]=false, [9841]=false, [12160]=false, [15981]=false, [20664]=false, [20701]=false, [25299]=false, [26981]=false, [26982]=false, [27532]=false, [28716]=false, [28722]=false, [28723]=false, [28724]=false, [31782]=false, [32131]=false, [38657]=false},
+                ["Renew"] = {"Renew Down", [139]=false, [6074]=false, [6075]=false, [6076]=false, [6077]=false, [6078]=false, [8362]=false, [10927]=false, [10928]=false, [10929]=false, [11640]=false, [22168]=false, [23895]=false, [25058]=false, [25221]=false, [25222]=false, [25315]=false, [27606]=false, [28807]=false, [31325]=false, [34423]=false, [36679]=false, [36969]=false, [37260]=false, [37978]=false, [38210]=false, [41456]=false, [44174]=false, [45859]=false, [46192]=false, [46563]=false, [47079]=false},
                 ["Repentance"] = {"Repentance Down", [20066]=false, [29511]=false, [29511]=false, [32779]=false},
                 ["Resurrection Sickness"] = {"Resurrection Sickness Down", [15007]=false},
                 ["Retaliation"] = {"Retaliation Down", [20230]=false, [20240]=false, [22857]=false, [22858]=false, [40546]=false},
@@ -1605,7 +1618,7 @@ function HEAT:LoadStaticData()
                 ["Shatter"] = {"Shatter Down", [11170]=false, [12982]=false, [12983]=false, [12984]=false, [12985]=false, [33654]=false, [33671]=false},
                 ["Shield Wall"] = {"Shield Wall Down", [871]=false, [15062]=false, [29061]=false, [29390]=false, [31731]=false, [41104]=false, [41196]=false},
                 ["Silence"] = {"Silence Down", [6726]=false, [6726]=false, [6726]=false, [8988]=false, [12528]=false, [15487]=false, [18278]=false, [18327]=false, [22666]=false, [23207]=false, [26069]=false, [27559]=false, [29943]=false, [30225]=false, [37160]=false, [38491]=false, [38913]=false},
-                --["Siphon Life"] = {"Siphon Life Down", [18265]=false, [18879]=false, [18880]=false, [18881]=false, [27264]=false, [30911]=false, [35195]=false, [41597]=false},
+                ["Siphon Life"] = {"Siphon Life Down", [18265]=false, [18879]=false, [18880]=false, [18881]=false, [27264]=false, [30911]=false, [35195]=false, [41597]=false},
                 ["Slice and Dice"] = {"Slice and Dice Down", [5171]=false, [6434]=false, [6774]=false, [30470]=false, [43547]=false},
                 ["Slow Fall"] = {"Slow Fall Down", [130]=false, [12438]=false},
                 ["Spell Lock"] = {"Spell Lock Down", [19244]=false, [19647]=false, [19648]=false, [19650]=false, [20433]=false, [20434]=false, [24259]=false, [30849]=false},
@@ -1625,8 +1638,8 @@ function HEAT:LoadStaticData()
                 ["Swiftness Potion"] = {"Swiftness Potion Down", [2335]=false},
                 ["Tidal Charm"] = {"Tidal Charm Down", [835]=false},
                 ["Tiger's Fury"] = {"Tiger's Fury Down", [5217]=false, [6793]=false, [9845]=false, [9846]=false},
-                --["Touch of Weakness"] = {"Touch of Weakness Down", [2652]=false, [2943]=false, [19249]=false, [19251]=false, [19252]=false, [19253]=false, [19254]=false, [19261]=false, [19262]=false, [19264]=false, [19265]=false, [19266]=false, [25460]=false, [25461]=false, [28598]=false},
-                --["Travel Form"] = {"Travel Form Down", [783]=false, [32447]=false},
+                ["Touch of Weakness"] = {"Touch of Weakness Down", [2652]=false, [2943]=false, [19249]=false, [19251]=false, [19252]=false, [19253]=false, [19254]=false, [19261]=false, [19262]=false, [19264]=false, [19265]=false, [19266]=false, [25460]=false, [25461]=false, [28598]=false},
+                ["Travel Form"] = {"Travel Form Down", [783]=false, [32447]=false},
                 ["Tremor Totem"] = {"Tremor Totem Down", [8143]=false},
                 ["Vampiric Embrace"] = {"Vampiric Embrace Down", [15286]=false, [15290]=false},
                 ["Vanish"] = {"Vanish Down", [1856]=false, [1857]=false, [11327]=false, [11329]=false, [24223]=false, [24228]=false, [24229]=false, [24230]=false, [24231]=false, [24232]=false, [24233]=false, [24699]=false, [26888]=false, [26889]=false, [27617]=false, [29448]=false, [31619]=false, [35205]=false, [39667]=false, [41476]=false, [41479]=false, [44290]=false},
@@ -1881,6 +1894,18 @@ function HEAT:LoadStaticData()
             ["SPELL_SUMMON"] = {
                 ["Death by Peasant"] = {"Death by Peasant", [18307]=false, [18308]=false},
             },
+            ["UNIT_AURA"] = {
+                ["Drink"] = {"Drinking", [430]=false, [431]=false, [432]=false, [1133]=false, [1135]=false, [1137]=false, [10250]=false, [22734]=false, [24355]=false, [25696]=false, [26261]=false, [26402]=false, [26473]=false, [26475]=false, [27089]=false, [29007]=false, [30024]=false, [34291]=false, [43154]=false, [43155]=false, [43706]=false, [46755]=false},
+                ["PvP Trinket"] = {"Trinketed", [28243]=false, [42292]=false},
+            },
+            ["UNIT_SPELLCAST_START"] = {
+                ["Drink"] = {"Drinking", [430]=false, [431]=false, [432]=false, [1133]=false, [1135]=false, [1137]=false, [10250]=false, [22734]=false, [24355]=false, [25696]=false, [26261]=false, [26402]=false, [26473]=false, [26475]=false, [27089]=false, [29007]=false, [30024]=false, [34291]=false, [43154]=false, [43155]=false, [43706]=false, [46755]=false},
+                ["PvP Trinket"] = {"Trinketed", [28243]=false, [42292]=false},
+            },
+            ["UNIT_SPELLCAST_SUCCEEDED"] = {
+                ["Drink"] = {"Drinking", [430]=false, [431]=false, [432]=false, [1133]=false, [1135]=false, [1137]=false, [10250]=false, [22734]=false, [24355]=false, [25696]=false, [26261]=false, [26402]=false, [26473]=false, [26475]=false, [27089]=false, [29007]=false, [30024]=false, [34291]=false, [43154]=false, [43155]=false, [43706]=false, [46755]=false},
+                ["PvP Trinket"] = {"Trinketed", [28243]=false, [42292]=false},
+            },
         }
     end
     
@@ -1896,9 +1921,10 @@ HEAT.frame = HeatFrame
 HeatFrame:RegisterEvent("ADDON_LOADED")
 HeatFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 HeatFrame:RegisterEvent("ARENA_OPPONENT_UPDATE")
---HeatFrame:RegisterEvent("ARENA_COOLDOWNS_UPDATE") -- Need to add to ProcessHostilityEvent
---HeatFrame:RegisterEvent("ARENA_CROWD_CONTROL_SPELL_UPDATE") -- Need to add to ProcessHostilityEvent
---HeatFrame:RegisterEvent("-ARENA_PREP_OPPONENT_SPECIALIZATIONS") -- Need to add to ProcessHostilityEvent
+--HeatFrame:RegisterEvent("UNIT_NAME_UPDATE")
+--HeatFrame:RegisterEvent("ARENA_CROWD_CONTROL_SPELL_UPDATE")
+--HeatFrame:RegisterEvent("ARENA_COOLDOWNS_UPDATE")
+--HeatFrame:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
 HeatFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 HeatFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 HeatFrame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
