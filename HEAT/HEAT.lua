@@ -11,6 +11,7 @@ local currentProject = WOW_PROJECT_ID or PROJECT_ERA
 local UnitGUID = UnitGUID
 local UnitName = UnitName
 local UnitExists = UnitExists
+local UnitCanAttack = UnitCanAttack
 local UnitIsEnemy = UnitIsEnemy
 local UnitIsFriend = UnitIsFriend
 local UnitIsUnit = UnitIsUnit
@@ -26,7 +27,17 @@ local IsInGroup = IsInGroup
 local IsInRaid = IsInRaid
 local IsInInstance = IsInInstance
 local pairs, ipairs, next, type, tonumber, select, string, table = pairs, ipairs, next, type, tonumber, select, string, table
+local wipe = wipe
 local bit_band, bit_bor = bit.band, bit.bor
+
+if not wipe then
+    wipe = function(t)
+        for k in pairs(t) do
+            t[k] = nil
+        end
+        return t
+    end
+end
 
 local function Init()
     if HEAT.initialized then return end
@@ -40,12 +51,16 @@ local function Init()
     -- Always reset these (Runtime Caches)
     HEAT.spellData = {}
     HEAT.storedBuffs = {}
-    HEAT.spellIDMap = {} 
-    HEAT.AuraInfo = {}    
+    HEAT.spellIDMap = {}
+    HEAT.trackedAuraIDs = {}
+    HEAT.AuraInfo = {}
     HEAT.unitCastDelayed = {}
-    HEAT.guidToUnit = {} 
+    HEAT.guidToUnit = {}
     HEAT.unitToGuid = {}
     HEAT.unitTokens = {}
+    HEAT.scanUnitTokens = {}
+    HEAT.scanFoundSpells = {}
+    HEAT.soundPathCache = {}
     HEAT.hostilityCache = { cache = {}, head = nil, tail = nil, size = 0, maxSize = MAXSIZE }
     
     -- Setup Constants
@@ -71,6 +86,12 @@ local function Init()
     for i = 1, 4 do table.insert(HEAT.unitTokens, "partypet"..i) end
     for i = 1, 40 do table.insert(HEAT.unitTokens, "raid"..i) end
     for i = 1, 40 do table.insert(HEAT.unitTokens, "raidpet"..i) end
+
+    HEAT.scanUnitTokens = { "target", "focus", "mouseover" }
+    for i = 1, 5 do table.insert(HEAT.scanUnitTokens, "boss"..i) end
+    for i = 1, 5 do table.insert(HEAT.scanUnitTokens, "arena"..i) end
+    for i = 1, 5 do table.insert(HEAT.scanUnitTokens, "arenapet"..i) end
+    for i = 1, 40 do table.insert(HEAT.scanUnitTokens, "nameplate"..i) end
     
     HEAT.FLAGS = {
         PLAYER = COMBATLOG_OBJECT_TYPE_PLAYER or 0x00000400,
@@ -137,6 +158,9 @@ local function Init()
                             name = name,
                             duration = dur
                         }
+                        if HEAT.nameplateBuffs and HEAT.nameplateBuffs[name] then
+                            HEAT.trackedAuraIDs[id] = true
+                        end
                         spellCount = spellCount + 1
                     end
                 end
@@ -161,9 +185,21 @@ local function Init()
                         soundFile = key
                     end
                     if soundFile then
+                        local soundPath = HEAT.SOUND_PREFIX .. soundFile .. HEAT.fileExtension
+                        HEAT.soundPathCache[soundFile] = soundPath
                         for id, requireDst in pairs(data) do
                             if type(id) == "number" and id ~= 1 then
-                                HEAT.spellIDMap[eventType][id] = { soundFile = soundFile, requireDst = requireDst }
+                                HEAT.spellIDMap[eventType][id] = { soundFile = soundFile, soundPath = soundPath, requireDst = requireDst }
+                                if eventType == "UNIT_AURA"
+                                    or eventType == "SPELL_AURA_APPLIED"
+                                    or eventType == "SPELL_AURA_REFRESH"
+                                    or eventType == "SPELL_AURA_APPLIED_DOSE"
+                                    or eventType == "SPELL_AURA_REMOVED"
+                                    or eventType == "SPELL_AURA_BROKEN"
+                                    or eventType == "SPELL_AURA_BROKEN_SPELL"
+                                    or eventType == "SPELL_AURA_REMOVED_DOSE" then
+                                    HEAT.trackedAuraIDs[id] = true
+                                end
                             end
                         end
                     end
@@ -171,6 +207,10 @@ local function Init()
             end
         end
     end
+
+    HEAT.trackedAuraIDs[71] = true
+    HEAT.trackedAuraIDs[2457] = true
+    HEAT.trackedAuraIDs[2458] = true
 
     HEAT.initialized = true
     print("HEAT Initialized.")
@@ -189,17 +229,27 @@ function HEAT:SendMessage(message)
             channel = "RAID"
         end
         
-        if channel and msg then 
-            C_ChatInfo.SendAddonMessage(HEAT.prefix, msg, channel) 
+        if channel and msg then
+            if C_ChatInfo and C_ChatInfo.SendAddonMessage then
+                C_ChatInfo.SendAddonMessage(HEAT.prefix, msg, channel)
+            elseif SendAddonMessage then
+                SendAddonMessage(HEAT.prefix, msg, channel)
+            end
         end
     end
 end
     
 function HEAT:PlaySound(file, channel)
     if not file then return end
-    local soundPath = self.SOUND_PREFIX .. file .. self.fileExtension
+    local soundPath = self.soundPathCache and self.soundPathCache[file]
+    if not soundPath then
+        soundPath = self.SOUND_PREFIX .. file .. self.fileExtension
+        if self.soundPathCache then
+            self.soundPathCache[file] = soundPath
+        end
+    end
     local soundChannel = channel or self.CHANNEL
-    if soundPath and soundChannel then PlaySoundFile(soundPath, soundChannel) end
+    if soundChannel then PlaySoundFile(soundPath, soundChannel) end
 end
     
 function HEAT:RemoveNode(node)
@@ -296,7 +346,7 @@ function HEAT:IsEnemy(guid, unitFlags)
     if not guid or not unitFlags then return false end
     
     -- Check hostility bitmask
-    local isHostile = (bit.band(unitFlags, self.FLAGS.REACTION_HOSTILE) > 0)
+    local isHostile = (bit_band(unitFlags, self.FLAGS.REACTION_HOSTILE) > 0)
     
     -- Only interact with the cache if the unit is hostile
     if isHostile then
@@ -318,7 +368,7 @@ function HEAT:BuildFlags(unit, guid)
     
     local flags = 0
     
-    if UnitCanAttack("player", unit) then 
+    if (UnitCanAttack and UnitCanAttack("player", unit)) or UnitIsEnemy("player", unit) then
         flags = self.FLAGS.REACTION_HOSTILE
     elseif UnitIsFriend("player", unit) then 
         flags = self.FLAGS.REACTION_FRIENDLY
@@ -327,20 +377,20 @@ function HEAT:BuildFlags(unit, guid)
     end
     
     if UnitIsPlayer(unit) then 
-        flags = bit.bor(flags, self.FLAGS.PLAYER)
+        flags = bit_bor(flags, self.FLAGS.PLAYER)
     elseif UnitPlayerControlled(unit) then 
-        flags = bit.bor(flags, self.FLAGS.PET)
+        flags = bit_bor(flags, self.FLAGS.PET)
     else 
-        flags = bit.bor(flags, self.FLAGS.NPC) 
+        flags = bit_bor(flags, self.FLAGS.NPC)
     end
     
-    if UnitPlayerControlled(unit) then flags = bit.bor(flags, self.FLAGS.CONTROL_PLAYER) end
+    if UnitPlayerControlled(unit) then flags = bit_bor(flags, self.FLAGS.CONTROL_PLAYER) end
     
     local isMine = UnitIsUnit(unit, "player") or UnitIsUnit(unit, "pet") or UnitIsUnit(unit, "vehicle")
     local isInGroup = UnitInParty(unit) or UnitInRaid(unit)
     
     if not isMine and not isInGroup then
-        flags = bit.bor(flags, self.FLAGS.AFFILIATION_OUTSIDER)
+        flags = bit_bor(flags, self.FLAGS.AFFILIATION_OUTSIDER)
     end
     return flags
 end
@@ -406,11 +456,53 @@ function HEAT:ClearUnitCache(unit)
 end
     
 function HEAT:StoreBuff(guid, spellID, data)
+    if not guid or not spellID then return end
+    if not data then
+        if self.storedBuffs[guid] then
+            self.storedBuffs[guid][spellID] = nil
+            if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
+        end
+        return
+    end
+
     if not self.storedBuffs[guid] then self.storedBuffs[guid] = {} end
-    self.storedBuffs[guid][spellID] = data
+    local record = self.storedBuffs[guid][spellID]
+    if not record then
+        record = {}
+        self.storedBuffs[guid][spellID] = record
+    elseif record == data then
+        return
+    else
+        wipe(record)
+    end
+    for key, value in pairs(data) do
+        record[key] = value
+    end
+end
+
+function HEAT:SetStoredBuff(guid, spellID, name, icon, duration, expirationTime, startTime, stacks, isScanned)
+    if not guid or not spellID then return end
+    if not self.storedBuffs[guid] then self.storedBuffs[guid] = {} end
+
+    local record = self.storedBuffs[guid][spellID]
+    if not record then
+        record = {}
+        self.storedBuffs[guid][spellID] = record
+    end
+
+    record.destGUID = guid
+    record.spellID = spellID
+    record.name = name
+    record.icon = icon
+    record.duration = duration
+    record.expirationTime = expirationTime
+    record.startTime = startTime
+    record.stacks = stacks
+    record.isScanned = isScanned or nil
 end
     
 function HEAT:RemoveBuff(guid, spellID)
+    if not guid or not spellID then return end
     if self.storedBuffs[guid] then
         self.storedBuffs[guid][spellID] = nil
         if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
@@ -428,39 +520,36 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
     end
     
     if not isEnemy then return end
+    if not self.trackedAuraIDs or not next(self.trackedAuraIDs) then return end
             
     local now = GetTime()
-    local foundSpells = {}
+    local foundSpells = self.scanFoundSpells
+    if not foundSpells then
+        foundSpells = {}
+        self.scanFoundSpells = foundSpells
+    else
+        wipe(foundSpells)
+    end
     
     for i = 1, 40 do
         local name, icon, count, _, duration, expirationTime, source, _, _, spellID = UnitAura(unit, i, "HELPFUL")
         if not name then break end 
         
-        if spellID and self.AuraInfo[spellID] then
+        if spellID and self.trackedAuraIDs[spellID] then
             foundSpells[spellID] = true
             
             local calculatedDuration = duration
-            if calculatedDuration == 0 then calculatedDuration = -1 end
+            if not calculatedDuration or calculatedDuration == 0 then calculatedDuration = -1 end
             
             local stackCount = count or 0
             if stackCount == 0 then stackCount = 1 end
             
             local start = now
-            if expirationTime and expirationTime > 0 then
+            if expirationTime and expirationTime > 0 and duration and duration > 0 then
                 start = expirationTime - duration
             end
                             
-            self:StoreBuff(guid, spellID, {
-                destGUID = guid, 
-                icon = icon,
-                duration = calculatedDuration, 
-                expirationTime = expirationTime,
-                spellID = spellID,
-                name = name, 
-                startTime = start,
-                stacks = stackCount,
-                isScanned = true -- Mark as verified by UnitAura
-            })
+            self:SetStoredBuff(guid, spellID, name, icon, calculatedDuration, expirationTime, start, stackCount, true)
         end
     end
     
@@ -483,11 +572,14 @@ function HEAT:ScanUnitBuffs(unit, providedFlags, providedIsEnemy, providedGUID)
         end
         if not next(self.storedBuffs[guid]) then self.storedBuffs[guid] = nil end
     end
+
+    wipe(foundSpells)
 end
 
 function HEAT:ScanAllUnits()
-    if not self.unitTokens then return end
-    for _, unit in ipairs(self.unitTokens) do
+    local unitTokens = self.scanUnitTokens or self.unitTokens
+    if not unitTokens then return end
+    for _, unit in ipairs(unitTokens) do
         if UnitExists(unit) then
             local guid = UnitGUID(unit)
             if guid then
@@ -500,10 +592,10 @@ function HEAT:ScanAllUnits()
 end
     
 function HEAT:ProcessDataEvents(event, ...)
-    local now = GetTime()
     local INFINITY = -1 
     
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+        local now = GetTime()
         -- args 1-11 are standard. args 12-18 vary by subEvent.
         --       1          2         3           4           5           6                7             8         9         10          11         12     13     14     15     16     17     18
         local timestamp, subEvent, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, arg12, arg13, arg14, arg15, arg16, arg17, arg18 = CombatLogGetCurrentEventInfo()
@@ -525,7 +617,7 @@ function HEAT:ProcessDataEvents(event, ...)
             -- For CAST_SUCCESS, arg12 is SpellID
             local spellID = arg12
             
-            if self:IsEnemy(sourceGUID, sourceFlags) then
+            if sourceGUID and sourceFlags and self:IsEnemy(sourceGUID, sourceFlags) then
                 local newStance = nil
                 -- Charge -> Battle Stance
                 if spellID == 100 or spellID == 6178 or spellID == 11578 then newStance = 2457 
@@ -540,21 +632,12 @@ function HEAT:ProcessDataEvents(event, ...)
                     self:RemoveBuff(sourceGUID, 2458) -- Berserker
                     self:RemoveBuff(sourceGUID, 71)   -- Defensive
                     
-                    self:StoreBuff(sourceGUID, newStance, {
-                        destGUID = sourceGUID,
-                        spellID = newStance,
-                        name = stanceInfo and stanceInfo.name,
-                        icon = stanceInfo and stanceInfo.icon,
-                        duration = INFINITY,
-                        expirationTime = nil,
-                        startTime = now,
-                        stacks = 0 
-                    })
+                    self:SetStoredBuff(sourceGUID, newStance, stanceInfo and stanceInfo.name, stanceInfo and stanceInfo.icon, INFINITY, nil, now, 0, nil)
                 end
             end
         end
 
-        local isApplication = subEvent == "SPELL_AURA_APPLIED" --[[or subEvent == "SPELL_AURA_REFRESH"]] or subEvent == "SPELL_AURA_APPLIED_DOSE"
+        local isApplication = subEvent == "SPELL_AURA_APPLIED" or subEvent == "SPELL_AURA_REFRESH" or subEvent == "SPELL_AURA_APPLIED_DOSE"
         local isRemoval = subEvent == "SPELL_AURA_REMOVED" or subEvent == "SPELL_AURA_BROKEN" or subEvent == "SPELL_AURA_BROKEN_SPELL" or subEvent == "SPELL_AURA_REMOVED_DOSE"
         local isDispel = subEvent == "SPELL_DISPEL" or subEvent == "SPELL_STOLEN"
         
@@ -572,16 +655,17 @@ function HEAT:ProcessDataEvents(event, ...)
             auraType = arg18
         end
         
-        local spellDataForLookup = self.AuraInfo[spellID]
+        local isTrackedAura = spellID and self.trackedAuraIDs and self.trackedAuraIDs[spellID]
         
-        if (isApplication or isRemoval or isDispel) and spellDataForLookup then
+        if (isApplication or isRemoval or isDispel) and isTrackedAura then
             
             -- Only track logic if the destination is an enemy
-            if self.IsEnemy and self:IsEnemy(destGUID, destFlags) and auraType == "BUFF" then
+            if self.IsEnemy and destGUID and destFlags and auraType == "BUFF" and self:IsEnemy(destGUID, destFlags) then
+                local spellDataForLookup = self.AuraInfo[spellID]
                 
                 if isApplication then
                     local buffDuration = INFINITY
-                    if spellDataForLookup.duration and spellDataForLookup.duration ~= -1 then 
+                    if spellDataForLookup and spellDataForLookup.duration and spellDataForLookup.duration ~= -1 then
                         buffDuration = tonumber(spellDataForLookup.duration) 
                     end
                     
@@ -592,26 +676,28 @@ function HEAT:ProcessDataEvents(event, ...)
                         if amount then
                             currentStacks = amount
                         elseif self.storedBuffs[destGUID] and self.storedBuffs[destGUID][spellID] then
-                            currentStacks = self.storedBuffs[destGUID][spellID].stacks
+                            currentStacks = self.storedBuffs[destGUID][spellID].stacks or currentStacks
                         end
                     end
                     
-                    self:StoreBuff(destGUID, spellID, {
-                            destGUID = destGUID, 
-                            duration = buffDuration, 
-                            expirationTime = expirationTime,
-                            spellID = spellID,
-                            name = spellName or spellDataForLookup.name,
-                            icon = spellDataForLookup.icon, 
-                            startTime = now,
-                            stacks = currentStacks 
-                    })
+                    self:SetStoredBuff(
+                        destGUID,
+                        spellID,
+                        spellName or (spellDataForLookup and spellDataForLookup.name),
+                        spellDataForLookup and spellDataForLookup.icon,
+                        buffDuration,
+                        expirationTime,
+                        now,
+                        currentStacks,
+                        nil
+                    )
                 elseif (isRemoval or isDispel) then
                     self:RemoveBuff(destGUID, spellID)
                 end
             end
         end
     elseif event == "CHAT_MSG_ADDON" then
+        local now = GetTime()
         local messagePrefix, msg, _, sender = ...
         if messagePrefix == self.prefix and sender ~= UnitName("player") and msg then
             local eventType, data = msg:match("([^#]+)#(.*)")
@@ -634,10 +720,7 @@ function HEAT:ProcessDataEvents(event, ...)
                 if expirationTime then duration = expirationTime - now; if duration < 0 then duration = 0 end
                 elseif spell and spell.duration ~= INFINITY then duration = spell.duration end
                 
-                self:StoreBuff(guid, spellID, {
-                        destGUID = guid, duration = duration, expirationTime = expirationTime,
-                        spellID = spellID, icon = spell.icon, startTime = now
-                })
+                self:SetStoredBuff(guid, spellID, spell.name, spell.icon, duration, expirationTime, now, nil, nil)
                 
             elseif eventType == "REMOVED" then
                 local _, spellID = data:match("([^#]+)#([^#]+)")
@@ -652,10 +735,16 @@ function HEAT:ProcessHostilityEvent(event, ...)
         if not self.hostilityCache then return end
         
         -- Process raw data (Combat Log / Chat Sync)
-        self:ProcessDataEvents(event, ...)
+        if event == "COMBAT_LOG_EVENT_UNFILTERED" or event == "CHAT_MSG_ADDON" then
+            self:ProcessDataEvents(event, ...)
+            return
+        end
         
         -- Handle Zone Changes / Roster updates
         if event == "PLAYER_ENTERING_WORLD" or event == "ARENA_OPPONENT_UPDATE" or event == "GROUP_ROSTER_UPDATE" then
+            if event == "PLAYER_ENTERING_WORLD" then
+                self.playerGUID = UnitGUID("player") or self.playerGUID
+            end
             self:ScanAllUnits()
             -- Arena Update Specifics: Check for removal
             if event == "ARENA_OPPONENT_UPDATE" then
@@ -674,8 +763,7 @@ function HEAT:ProcessHostilityEvent(event, ...)
         if event == "PLAYER_TARGET_CHANGED" then unitToUpdate = "target"
         elseif event == "PLAYER_FOCUS_CHANGED" then unitToUpdate = "focus"
         elseif event == "UPDATE_MOUSEOVER_UNIT" then unitToUpdate = "mouseover"
-        elseif event == "PLAYER_FLAGS_CHANGED" then unitToUpdate = "player"
-        elseif event == "NAME_PLATE_UNIT_ADDED" or event == "UNIT_FLAGS" or event == "UNIT_FACTION" or event == "UNIT_TARGET" or event == "UNIT_AURA" then
+        elseif event == "NAME_PLATE_UNIT_ADDED" or event == "UNIT_FLAGS" or event == "UNIT_FACTION" or event == "UNIT_AURA" then
             local unitId = ...
             if unitId and UnitExists(unitId) then 
                 unitToUpdate = unitId 
@@ -1880,28 +1968,17 @@ HEAT.frame = HeatFrame
 HeatFrame:RegisterEvent("ADDON_LOADED")
 HeatFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 HeatFrame:RegisterEvent("ARENA_OPPONENT_UPDATE")
-HeatFrame:RegisterEvent("UNIT_NAME_UPDATE")
-HeatFrame:RegisterEvent("ARENA_CROWD_CONTROL_SPELL_UPDATE")
-HeatFrame:RegisterEvent("ARENA_COOLDOWNS_UPDATE")
-HeatFrame:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
 HeatFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 HeatFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 HeatFrame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
-HeatFrame:RegisterEvent("PLAYER_FLAGS_CHANGED")
 HeatFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 HeatFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 HeatFrame:RegisterEvent("PLAYER_FOCUS_CHANGED")
 HeatFrame:RegisterEvent("UNIT_FLAGS")
 HeatFrame:RegisterEvent("UNIT_FACTION")
-HeatFrame:RegisterEvent("UNIT_TARGET")
 HeatFrame:RegisterEvent("UNIT_AURA")
 HeatFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 HeatFrame:RegisterEvent("CHAT_MSG_ADDON")
-HeatFrame:RegisterEvent("UNIT_SPELLCAST_START")
-HeatFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
-HeatFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
-HeatFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE")
-HeatFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 
 -- Main event handler
 HeatFrame:SetScript("OnEvent", function(self, event, ...)
@@ -1912,6 +1989,9 @@ HeatFrame:SetScript("OnEvent", function(self, event, ...)
         Init()
     elseif event == "PLAYER_ENTERING_WORLD" then
         Init()
+        if HEAT.ProcessHostilityEvent then
+            HEAT:ProcessHostilityEvent(event, ...)
+        end
         
     -- 2. Pass Events to the Hostility Processor
     elseif HEAT.ProcessHostilityEvent then
