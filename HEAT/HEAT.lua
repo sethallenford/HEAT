@@ -91,8 +91,8 @@ local function Init()
     end
 
     -- Process Sound Tables
-    if HEAT.soundTable["SPELL_AURA_APPLIED"] and not HEAT.soundTable["SPELL_AURA_REFRESH"] then
-        HEAT.soundTable["SPELL_AURA_REFRESH"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
+    if HEAT.soundTable["SPELL_AURA_APPLIED"] and not HEAT.soundTable["UNIT_AURA"] then
+        --HEAT.soundTable["SPELL_AURA_REFRESH"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
         HEAT.soundTable["UNIT_AURA"] = HEAT.soundTable["SPELL_AURA_APPLIED"]
     end
 
@@ -554,7 +554,7 @@ function HEAT:ProcessDataEvents(event, ...)
             end
         end
 
-        local isApplication = subEvent == "SPELL_AURA_APPLIED" or subEvent == "SPELL_AURA_REFRESH" or subEvent == "SPELL_AURA_APPLIED_DOSE"
+        local isApplication = subEvent == "SPELL_AURA_APPLIED" --[[or subEvent == "SPELL_AURA_REFRESH"]] or subEvent == "SPELL_AURA_APPLIED_DOSE"
         local isRemoval = subEvent == "SPELL_AURA_REMOVED" or subEvent == "SPELL_AURA_BROKEN" or subEvent == "SPELL_AURA_BROKEN_SPELL" or subEvent == "SPELL_AURA_REMOVED_DOSE"
         local isDispel = subEvent == "SPELL_DISPEL" or subEvent == "SPELL_STOLEN"
         
@@ -588,7 +588,7 @@ function HEAT:ProcessDataEvents(event, ...)
                     local expirationTime = (buffDuration == INFINITY) and nil or ((buffDuration > 0) and (now + buffDuration) or nil)
                     
                     local currentStacks = 1
-                    if (subEvent == "SPELL_AURA_APPLIED_DOSE" or subEvent == "SPELL_AURA_REFRESH") then
+                    if (subEvent == "SPELL_AURA_APPLIED_DOSE" --[[or subEvent == "SPELL_AURA_REFRESH"]]) then
                         if amount then
                             currentStacks = amount
                         elseif self.storedBuffs[destGUID] and self.storedBuffs[destGUID][spellID] then
@@ -1349,7 +1349,7 @@ function HEAT:LoadStaticData()
                 ["Earthbind Totem"] = {"Earthbind Totem", [2484]=false, [15786]=false, [38304]=false},
                 ["Electrified Net"] = {"Electrified Net", [11820]=false, [11825]=false, [35107]=false, [35107]=false, [35107]=false, [35108]=false, [43362]=false, [43363]=false},
                 ["Elune's Grace"] = {"Elune's Grace", [2651]=false},
-                ["Enrage"] = {"Enrage", [3019]=false, [5229]=false, [8269]=false, [8599]=false, [12317]=false, [12686]=false, [12795]=false, [12880]=false, [13045]=false, [13046]=false, [13047]=false, [13048]=false, [14201]=false, [14202]=false, [14203]=false, [14204]=false, [15061]=false, [15097]=false, [15716]=false, [18501]=false, [19516]=false, [19953]=false, [23537]=false, [24318]=false, [26527]=false, [27897]=false, [28131]=false, [28468]=false, [28747]=false, [28798]=false, [29691]=false, [30485]=false, [32964]=false, [33653]=false, [34409]=false, [34624]=false, [34670]=false, [34970]=false, [34971]=false, [36992]=false, [37023]=false, [37648]=false, [37975]=false, [38046]=false, [38947]=false, [39249]=false, [40683]=false, [40743]=false, [41305]=false, [41447]=false, [44779]=false, [45111]=false},
+                --["Enrage"] = {"Enrage", [3019]=false, [5229]=false, [8269]=false, [8599]=false, [12317]=false, [12686]=false, [12795]=false, [12880]=false, [13045]=false, [13046]=false, [13047]=false, [13048]=false, [14201]=false, [14202]=false, [14203]=false, [14204]=false, [15061]=false, [15097]=false, [15716]=false, [18501]=false, [19516]=false, [19953]=false, [23537]=false, [24318]=false, [26527]=false, [27897]=false, [28131]=false, [28468]=false, [28747]=false, [28798]=false, [29691]=false, [30485]=false, [32964]=false, [33653]=false, [34409]=false, [34624]=false, [34670]=false, [34970]=false, [34971]=false, [36992]=false, [37023]=false, [37648]=false, [37975]=false, [38046]=false, [38947]=false, [39249]=false, [40683]=false, [40743]=false, [41305]=false, [41447]=false, [44779]=false, [45111]=false},
                 --["Fade"] = {"Fade", [586]=false, [9578]=false, [9579]=false, [9592]=false, [10941]=false, [10942]=false, [12685]=false, [20672]=false, [25429]=false, [44036]=false},
                 --["Faerie Fire"] = {"Faerie Fire", [770]=false, [778]=false, [6950]=false, [9749]=false, [9907]=false, [13424]=false, [13752]=false, [16498]=false, [20656]=false, [21670]=false, [25602]=false, [26993]=false, [32129]=false},
                 ["Fear Ward"] = {"Fear Ward", [6346]=false},
@@ -1442,7 +1442,7 @@ function HEAT:LoadStaticData()
                 ["Stoneclaw Totem"] = {"Stoneclaw Totem", [5730]=false, [6390]=false, [6391]=false, [6392]=false, [10427]=false, [10428]=false, [25525]=false},
                 ["Stoneform"] = {"Stoneform", [7020]=false, [20594]=false},
                 ["Stoneskin Totem"] = {"Stoneskin Totem", [8071]=false, [8073]=false, [8154]=false, [8155]=false, [10406]=false, [10407]=false, [10408]=false, [25508]=false, [25509]=false, [38115]=false},
-                ["Stormstrike"] = {"Stormstrike", [17364]=false, [32175]=false, [32176]=false},
+                --["Stormstrike"] = {"Stormstrike", [17364]=false, [32175]=false, [32176]=false},
                 --["Strength of Earth Totem"] = {"Strength of Earth Totem", [8075]=false, [8160]=false, [8161]=false, [10442]=false, [25361]=false, [25528]=false, [31633]=false},
                 ["Stun"] = {"Stun", [25]=false, [56]=false, [2880]=false, [9179]=false, [17308]=false, [20170]=false, [20310]=false, [23454]=false, [24647]=false, [27880]=false, [34510]=false, [35856]=false, [39568]=false},
                 ["Stunning Blow"] = {"Stunning Blow", [5726]=false, [5727]=false, [15283]=false},
@@ -1497,7 +1497,7 @@ function HEAT:LoadStaticData()
                 ["Earthbind Totem"] = {"Earthbind Totem Down", [2484]=false, [15786]=false, [38304]=false},
                 ["Electrified Net"] = {"Electrified Net Down", [11820]=false, [11825]=false, [35107]=false, [35107]=false, [35107]=false, [35108]=false, [43362]=false, [43363]=false},
                 ["Elune's Grace"] = {"Elune's Grace Down", [2651]=false},
-                ["Enrage"] = {"Enrage Down", [3019]=false, [5229]=false, [8269]=false, [8599]=false, [12317]=false, [12686]=false, [12795]=false, [12880]=false, [13045]=false, [13046]=false, [13047]=false, [13048]=false, [14201]=false, [14202]=false, [14203]=false, [14204]=false, [15061]=false, [15097]=false, [15716]=false, [18501]=false, [19516]=false, [19953]=false, [23537]=false, [24318]=false, [26527]=false, [27897]=false, [28131]=false, [28468]=false, [28747]=false, [28798]=false, [29691]=false, [30485]=false, [32964]=false, [33653]=false, [34409]=false, [34624]=false, [34670]=false, [34970]=false, [34971]=false, [36992]=false, [37023]=false, [37648]=false, [37975]=false, [38046]=false, [38947]=false, [39249]=false, [40683]=false, [40743]=false, [41305]=false, [41447]=false, [44779]=false, [45111]=false},
+                --["Enrage"] = {"Enrage Down", [3019]=false, [5229]=false, [8269]=false, [8599]=false, [12317]=false, [12686]=false, [12795]=false, [12880]=false, [13045]=false, [13046]=false, [13047]=false, [13048]=false, [14201]=false, [14202]=false, [14203]=false, [14204]=false, [15061]=false, [15097]=false, [15716]=false, [18501]=false, [19516]=false, [19953]=false, [23537]=false, [24318]=false, [26527]=false, [27897]=false, [28131]=false, [28468]=false, [28747]=false, [28798]=false, [29691]=false, [30485]=false, [32964]=false, [33653]=false, [34409]=false, [34624]=false, [34670]=false, [34970]=false, [34971]=false, [36992]=false, [37023]=false, [37648]=false, [37975]=false, [38046]=false, [38947]=false, [39249]=false, [40683]=false, [40743]=false, [41305]=false, [41447]=false, [44779]=false, [45111]=false},
                 ["Evasion"] = {"Evasion Down", [4086]=false, [5277]=false, [15087]=false, [26669]=false, [31379]=false, [37683]=false, [38541]=false},
                 ["Evocation"] = {"Evocation Down", [12051]=false, [28763]=false, [30254]=false, [30935]=false, [30972]=false, [45052]=false},
                 ["Faerie Fire"] = {"Faerie Fire Down", [770]=false, [778]=false, [6950]=false, [9749]=false, [9907]=false, [13424]=false, [13752]=false, [16498]=false, [20656]=false, [21670]=false, [25602]=false, [26993]=false, [32129]=false},
@@ -1514,7 +1514,7 @@ function HEAT:LoadStaticData()
                 ["Grounding Totem"] = {"Grounding Totem Down", [8177]=false, [34079]=false},
                 ["Hammer of Justice"] = {"Hammer of Justice Down", [853]=false, [5588]=false, [5589]=false, [10308]=false, [13005]=false, [32416]=false, [37369]=false, [39077]=false, [41468]=false},
                 ["Healing Stream Totem"] = {"Healing Stream Totem Down", [5394]=false, [5396]=false, [6375]=false, [6377]=false, [10462]=false, [10463]=false, [25567]=false, [35199]=false},
-                ["Holy Shield"] = {"Holy Shield Down", [9800]=false, [20925]=false, [20927]=false, [20928]=false, [27179]=false, [31904]=false, [32777]=false},
+                --["Holy Shield"] = {"Holy Shield Down", [9800]=false, [20925]=false, [20927]=false, [20928]=false, [27179]=false, [31904]=false, [32777]=false},
                 ["Honorless Target"] = {"Honorless Target Down", [2479]=false, [46705]=false},
                 ["Ice Armor"] = {"Ice Armor Down", [7302]=false, [7320]=false, [10219]=false, [10220]=false, [27124]=false, [36881]=false},
                 ["Ice Barrier"] = {"Ice Barrier Down", [11426]=false, [13031]=false, [13032]=false, [13033]=false, [27134]=false, [33245]=false, [33405]=false},
@@ -1579,7 +1579,7 @@ function HEAT:LoadStaticData()
                 ["Stoneclaw Totem"] = {"Stoneclaw Totem Down", [5730]=false, [6390]=false, [6391]=false, [6392]=false, [10427]=false, [10428]=false, [25525]=false},
                 ["Stoneform"] = {"Stoneform Down", [7020]=false, [20594]=false},
                 ["Stoneskin Totem"] = {"Stoneskin Totem Down", [8071]=false, [8073]=false, [8154]=false, [8155]=false, [10406]=false, [10407]=false, [10408]=false, [25508]=false, [25509]=false, [38115]=false},
-                ["Stormstrike"] = {"Stormstrike Down", [17364]=false, [32175]=false, [32176]=false},
+                --["Stormstrike"] = {"Stormstrike Down", [17364]=false, [32175]=false, [32176]=false},
                 ["Strength of Earth Totem"] = {"Strength of Earth Totem Down", [8075]=false, [8160]=false, [8161]=false, [10442]=false, [25361]=false, [25528]=false, [31633]=false},
                 ["Stun"] = {"Stun Down", [25]=false, [56]=false, [2880]=false, [9179]=false, [17308]=false, [20170]=false, [20310]=false, [23454]=false, [24647]=false, [27880]=false, [34510]=false, [35856]=false, [39568]=false},
                 ["Stunning Blow"] = {"Stunning Blow Down", [5726]=false, [5727]=false, [15283]=false},
