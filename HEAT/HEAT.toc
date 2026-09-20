@@ -1,0 +1,13 @@
+## Interface: 11509, 20505, 16001
+## Author: Seth
+## Version:
+## Title: HEAT (|cFFFFD700Hostile|r |cFFFF8C00Event|r |cFFFF4500Aura|r |cFFFF0000Tracker|r)
+## SavedVariables:
+## SavedVariablesByCharacter:
+## OptionalDeps:
+## AllowLoadGameType: vanilla, tbc, camelot
+
+Shared\Shared.lua
+Classic\HEAT.lua [AllowLoadGameType vanilla]
+Anniversary\HEAT.lua [AllowLoadGameType tbc]
+HEAT.lua
